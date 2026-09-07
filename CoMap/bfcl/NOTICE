@@ -1,0 +1,15 @@
+CoMAP BFCL inference adaptation
+
+Adapted from CoMAP: Co-Evolving World Models and Agent Policies for LLM Agents
+Authors: Youwei Liu, Jian Wang, Hanlin Wang, Wenjie Li
+Source: https://github.com/loyiv/CoMAP
+Revision: a5f6e2d2a0aff571f9a5441bf82a796a724ea94d
+Upstream license: Apache License 2.0 (included in LICENSE).
+
+Modifications: BFCL native function-calling integration, hypothetical tool-state
+prompts, JSON reflection, explicit REVISE gating, aggregate usage accounting,
+Qwen3-32B configuration, tests and portable launch scripts.
+
+BFCL remains an external dependency:
+https://github.com/ShishirPatil/gorilla
+Revision: 6ea57973c7a6097fd7c5915698c54c17c5b1b6c8 (BFCL v4).

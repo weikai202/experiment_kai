@@ -1,0 +1,3 @@
+# Install the pinned official BFCL checkout separately (see README).
+pytest==9.1.1
+soundfile==0.14.0

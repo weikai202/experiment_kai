@@ -31,10 +31,10 @@ an external dependency; this repository does not duplicate its dataset or source
 ```bash
 git clone https://github.com/ShishirPatil/gorilla.git ../gorilla
 git -C ../gorilla checkout 6ea57973c7a6097fd7c5915698c54c17c5b1b6c8
-uv venv --python 3.10 CoMap/bfcl/.venv
-uv pip install --python CoMap/bfcl/.venv/bin/python \
+uv venv --python 3.10 CoMAP/bfcl/.venv
+uv pip install --python CoMAP/bfcl/.venv/bin/python \
   -e ../gorilla/berkeley-function-call-leaderboard \
-  -r CoMap/bfcl/requirements.txt --torch-backend cpu
+  -r CoMAP/bfcl/requirements.txt --torch-backend cpu
 ```
 
 The CPU evaluator environment does not serve the model. Use a separate CUDA
@@ -46,7 +46,7 @@ environment). `soundfile` covers an undeclared Qwen-agent import in BFCL.
 On a GPU node with the CUDA vLLM environment activated:
 
 ```bash
-bash CoMap/bfcl/serve_qwen3_32b.sh
+bash CoMAP/bfcl/serve_qwen3_32b.sh
 ```
 
 Defaults: one 80GB GPU, BF16, 16384-token context, one concurrent sequence,
@@ -59,13 +59,13 @@ for a specific vLLM executable. Missing weights are downloaded on first launch.
 In a second shell on the same GPU node:
 
 ```bash
-source CoMap/bfcl/qwen3_32b.env.sh
-CoMap/bfcl/.venv/bin/python -m CoMap.bfcl.smoke \
-  --result-dir "$PWD/CoMap/bfcl/results/smoke-001"
-CoMap/bfcl/.venv/bin/python -m CoMap.bfcl.run evaluate \
+source CoMAP/bfcl/qwen3_32b.env.sh
+CoMAP/bfcl/.venv/bin/python -m CoMAP.bfcl.smoke \
+  --result-dir "$PWD/CoMAP/bfcl/results/smoke-001"
+CoMAP/bfcl/.venv/bin/python -m CoMAP.bfcl.run evaluate \
   --model "$COMAP_REGISTRY_NAME" --test-category simple_python,multi_turn_base \
-  --result-dir "$PWD/CoMap/bfcl/results/smoke-001" \
-  --score-dir "$PWD/CoMap/bfcl/scores/smoke-001" --partial-eval
+  --result-dir "$PWD/CoMAP/bfcl/results/smoke-001" \
+  --score-dir "$PWD/CoMAP/bfcl/scores/smoke-001" --partial-eval
 ```
 
 This runs the first real entry of each category. `--count N` selects the first
@@ -75,14 +75,14 @@ samples validate execution, not statistically meaningful benchmark accuracy.
 For a full category:
 
 ```bash
-CoMap/bfcl/.venv/bin/python -m CoMap.bfcl.run generate \
+CoMAP/bfcl/.venv/bin/python -m CoMAP.bfcl.run generate \
   --model "$COMAP_REGISTRY_NAME" --test-category multi_turn_base \
   --temperature 0 --num-threads 1 --include-input-log \
-  --result-dir "$PWD/CoMap/bfcl/results/full-001"
-CoMap/bfcl/.venv/bin/python -m CoMap.bfcl.run evaluate \
+  --result-dir "$PWD/CoMAP/bfcl/results/full-001"
+CoMAP/bfcl/.venv/bin/python -m CoMAP.bfcl.run evaluate \
   --model "$COMAP_REGISTRY_NAME" --test-category multi_turn_base \
-  --result-dir "$PWD/CoMap/bfcl/results/full-001" \
-  --score-dir "$PWD/CoMap/bfcl/scores/full-001"
+  --result-dir "$PWD/CoMAP/bfcl/results/full-001" \
+  --score-dir "$PWD/CoMAP/bfcl/scores/full-001"
 ```
 
 Use the wrapper for both generation and evaluation to register the custom model.
@@ -99,7 +99,7 @@ terminates its model server. Startup has a 20-minute timeout.
 
 ```bash
 export VLLM_BIN=/path/to/cuda-environment/bin/vllm
-sbatch CoMap/bfcl/qwen3_smoke.sbatch
+sbatch CoMAP/bfcl/qwen3_smoke.sbatch
 ```
 
 Submit from the repository root. `COMAP_REPO_ROOT` and `COMAP_EVAL_PYTHON`
@@ -134,7 +134,7 @@ Use distinct registry names for different experiment configurations.
 ## Tests
 
 ```bash
-CoMap/bfcl/.venv/bin/python -m pytest CoMap/bfcl/test_handler.py -q
+CoMAP/bfcl/.venv/bin/python -m pytest CoMAP/bfcl/test_handler.py -q
 ```
 
 Tests cover revision gates, malformed JSON, token accounting, parallel tool

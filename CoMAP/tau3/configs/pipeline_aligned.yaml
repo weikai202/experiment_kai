@@ -1,0 +1,58 @@
+# Qwen3-32B non-thinking, served by vLLM from pinned Hugging Face weights.
+# Both roles share initial weights only; deploy separate checkpoints after training.
+tau_root: ../../../tau2-bench
+manifest_sha256: 3fbc80192b54dcb7e0c1f22496e90ab48d47f510c4c74f8244ee7e6f997c1d54
+seed: 0
+num_trials: 1
+max_steps: 100
+max_errors: 10
+policy:
+  backend: vllm
+  model: Qwen/Qwen3-32B
+  device: cuda
+  dtype: bfloat16
+  max_context: 16384
+  checkpoint: Qwen/Qwen3-32B
+  revision: 9216db5781bf21249d130ec9da846c4624c16137
+  base_url: http://127.0.0.1:8000/v1
+world_model:
+  backend: vllm
+  model: Qwen/Qwen3-32B
+  device: cuda
+  dtype: bfloat16
+  max_context: 16384
+  checkpoint: Qwen/Qwen3-32B
+  revision: 9216db5781bf21249d130ec9da846c4624c16137
+  base_url: http://127.0.0.1:8000/v1
+user_simulator:
+  model: openai/gpt-4o-mini-2024-07-18
+  seed_mode: omit
+  args: {}
+inference:
+  temperature: 0.0
+  draft_max_tokens: 512
+  draft_retry_max_tokens: 512
+  wm_max_tokens: 512
+  reflect_max_tokens: 768
+  revise_probability_threshold: 0.5
+  reflection_confidence_threshold: 0.6
+training:
+  world_model:
+    epochs: 3
+    learning_rate: 2.0e-05
+    gradient_accumulation_steps: 16
+    max_context: 16384
+    max_response_tokens: 512
+    distill_weight: 0.5
+    teacher_update_rate: 0.01
+    seed: 0
+  policy:
+    epochs: 3
+    learning_rate: 2.0e-05
+    gradient_accumulation_steps: 16
+    max_context: 16384
+    max_response_tokens: 768
+    alpha: 0.5
+    temperature: 0.7
+    teacher_update_rate: 0.01
+    seed: 0

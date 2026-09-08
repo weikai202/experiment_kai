@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "comap-tau3"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = ["tau2[voice,knowledge]", "jsonschema>=4", "pyyaml>=6", "audioop-lts; python_version >= '3.13'"]
+
+[project.optional-dependencies]
+train = ["torch>=2.6", "transformers>=4.51,<5"]
+dev = ["pytest>=8", "ruff>=0.9"]
+
+[project.scripts]
+comap-tau3 = "comap_tau3.cli:main"
+
+[tool.uv.sources]
+tau2 = { path = "../../../tau2-bench", editable = true }
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

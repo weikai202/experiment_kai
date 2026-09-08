@@ -1,0 +1,51 @@
+# Replace REQUIRED fields with the same model configuration used by your pipeline.
+tau_root: ../../../tau2-bench
+manifest_sha256: null
+seed: 42
+num_trials: 1
+max_steps: 100
+max_errors: 10
+policy:
+  backend: hf
+  model: REQUIRED_POLICY_CHECKPOINT
+  device: cuda
+  dtype: bfloat16
+  max_context: 16384
+world_model:
+  backend: hf
+  model: REQUIRED_WORLD_MODEL_CHECKPOINT
+  device: cuda
+  dtype: bfloat16
+  max_context: 16384
+user_simulator:
+  model: REQUIRED_USER_SIMULATOR_MODEL
+  args:
+    temperature: 0.0
+inference:
+  temperature: 0.7
+  draft_max_tokens: 512
+  draft_retry_max_tokens: 512
+  wm_max_tokens: 512
+  reflect_max_tokens: 768
+  revise_probability_threshold: 0.5
+  reflection_confidence_threshold: 0.6
+training:
+  world_model:
+    epochs: 3
+    learning_rate: 0.00002
+    gradient_accumulation_steps: 16
+    max_context: 16384
+    max_response_tokens: 512
+    distill_weight: 0.5
+    teacher_update_rate: 0.01
+    seed: 42
+  policy:
+    epochs: 3
+    learning_rate: 0.00002
+    gradient_accumulation_steps: 16
+    max_context: 16384
+    max_response_tokens: 768
+    alpha: 0.5
+    temperature: 0.7
+    teacher_update_rate: 0.01
+    seed: 42

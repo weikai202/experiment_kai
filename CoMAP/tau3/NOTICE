@@ -1,0 +1,9 @@
+CoMAP tau3 adaptation
+
+This implementation adapts the draft/world-model/reflection design and the
+public WMSD/SDPO loss formulas from loyiv/CoMAP, commit
+ a5f6e2d2a0aff571f9a5441bf82a796a724ea94d.
+The upstream CoMAP code is distributed under Apache License 2.0; a copy is
+included in LICENSE. Modified/adapted behavior and source mapping are documented
+in README.md. The tau2 benchmark is used as a separate dependency and retains
+its own license.

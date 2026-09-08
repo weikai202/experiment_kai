@@ -1,0 +1,52 @@
+# Confirmed backbone and evaluation decoding. Resolve model names to pinned local checkpoints before running.
+# max_steps, max_errors, token limits and num_trials remain baseline defaults, not confirmed pipeline settings.
+tau_root: ../../../tau2-bench
+manifest_sha256: 3fbc80192b54dcb7e0c1f22496e90ab48d47f510c4c74f8244ee7e6f997c1d54
+seed: 0
+num_trials: 1
+max_steps: 100
+max_errors: 10
+policy:
+  backend: hf
+  model: Qwen/Qwen3-32B
+  device: cuda
+  dtype: bfloat16
+  max_context: 16384
+world_model:
+  backend: hf
+  model: Qwen/Qwen3-32B
+  device: cuda
+  dtype: bfloat16
+  max_context: 16384
+user_simulator:
+  model: openai/gpt-4o-mini-2024-07-18
+  seed_mode: omit
+  args: {}
+inference:
+  temperature: 0.0
+  draft_max_tokens: 512
+  draft_retry_max_tokens: 512
+  wm_max_tokens: 512
+  reflect_max_tokens: 768
+  revise_probability_threshold: 0.5
+  reflection_confidence_threshold: 0.6
+training:
+  world_model:
+    epochs: 3
+    learning_rate: 2.0e-05
+    gradient_accumulation_steps: 16
+    max_context: 16384
+    max_response_tokens: 512
+    distill_weight: 0.5
+    teacher_update_rate: 0.01
+    seed: 0
+  policy:
+    epochs: 3
+    learning_rate: 2.0e-05
+    gradient_accumulation_steps: 16
+    max_context: 16384
+    max_response_tokens: 768
+    alpha: 0.5
+    temperature: 0.7
+    teacher_update_rate: 0.01
+    seed: 0

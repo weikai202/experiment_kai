@@ -1,0 +1,9 @@
+{
+  "model_revision": "9216db5781bf21249d130ec9da846c4624c16137",
+  "transformers": "4.51.3",
+  "nonthinking_encode": "passed",
+  "input_tokens": 36,
+  "target_tokens": 14,
+  "synthetic_input": true,
+  "model_loaded": false
+}

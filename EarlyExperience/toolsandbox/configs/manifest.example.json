@@ -1,0 +1,5 @@
+{
+  "train": [{"id": "YOUR_TRAIN_SCENARIO_ID", "family": "YOUR_TRAIN_TASK_FAMILY"}],
+  "dev": [{"id": "YOUR_DEV_SCENARIO_ID", "family": "YOUR_DEV_TASK_FAMILY"}],
+  "test": [{"id": "YOUR_TEST_SCENARIO_ID", "family": "YOUR_TEST_TASK_FAMILY"}]
+}

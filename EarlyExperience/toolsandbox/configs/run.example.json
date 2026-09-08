@@ -1,0 +1,30 @@
+{
+  "seed": 0,
+  "k": 3,
+  "expert": {
+    "model": "Qwen/Qwen3-32B",
+    "base_url": "http://127.0.0.1:8001/v1",
+    "api_key_env": "EXPERT_API_KEY",
+    "seed": 0,
+    "enable_thinking": false
+  },
+  "policy": {
+    "model": "Qwen/Qwen3-32B",
+    "base_url": "http://127.0.0.1:8000/v1",
+    "api_key_env": "POLICY_API_KEY",
+    "seed": 0,
+    "enable_thinking": false
+  },
+  "generator": {
+    "model": "Qwen/Qwen3-32B",
+    "base_url": "http://127.0.0.1:8000/v1",
+    "api_key_env": "POLICY_API_KEY",
+    "seed": 0,
+    "enable_thinking": false
+  },
+  "user": {
+    "model": "gpt-4o-mini-2024-07-18",
+    "base_url": "https://api.openai.com/v1",
+    "api_key_env": "USER_API_KEY"
+  }
+}

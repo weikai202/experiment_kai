@@ -1,60 +1,76 @@
-# Early Experience on τ³-bench
+# Early Experience on tau3-bench
 
-本模块实现 [EarlyExperience](https://github.com/OSU-NLP-Group/EarlyExperience)
-的 IL、IWM → IL、SR baseline，用于**训练后在未见任务上评测**。
-适配的 τ³ 源码版本：`17e07b1da2bbc0cadfddeea36412686e0604127b`。
+This module implements the IL, IWM -> IL, and SR baselines from
+[EarlyExperience](https://github.com/OSU-NLP-Group/EarlyExperience) for
+**training followed by evaluation on unseen tasks**.
+Pinned tau3 source revision: `17e07b1da2bbc0cadfddeea36412686e0604127b`.
 
-## 方法与范围
+## Methods and scope
 
-- **IL**：专家状态 → 专家动作。
-- **IWM**：在专家状态执行 K 个不同的候选动作，用真实下一观察做预测训练；
-  随后在**同一模型权重**上进行 IL。IWM 和 IL 使用不同的系统提示及目标格式。
-- **SR**：基座模型读取专家动作和候选动作的真实结果，每个候选生成一条反思；
-  将反思和专家动作作为监督目标，与专家样本混合训练。
-- 支持 `retail`、`airline`、`telecom` 和离线测试用 `mock`，仅文本半双工。
-  **尚不支持 `banking_knowledge`、语音/全双工和 solo/GT agent**。
-  知识检索环境包含外部资源，不能假定 `deepcopy` 能隔离状态。
-- 上游 EE 的 tau-bench 目录仍未发布实现。这里是根据其方法说明编写的 τ³ 适配，
-  不是作者发布的 τ³ 实验结果，也不保证复现原论文数值。
+- **IL**: expert state -> expert action.
+- **IWM**: execute K distinct candidate actions at expert states and train next-observation
+  prediction on their actual outcomes. Then perform IL using **the same model weights**.
+  IWM and IL have separate system prompts and target formats.
+- **SR**: the base model reads actual outcomes of expert and alternative actions and
+  generates one reflection per alternative. Train on reflection-plus-expert-action
+  targets mixed with expert examples.
+- Supports `retail`, `airline`, `telecom`, and `mock` for offline tests, in text
+  half-duplex mode only. **`banking_knowledge`, voice/full-duplex, and solo/GT agents
+  are not supported.** Knowledge retrieval environments use external resources;
+  `deepcopy` cannot be assumed to isolate their state.
+- At the time of implementation, upstream EE had not released its tau-bench adapter.
+  This is a tau3 adaptation based on its method descriptions, not an author-released
+  tau3 result or a guarantee of reproducing the paper's reported scores.
 
-实现决策：默认 K=3；一次请求生成多个候选并去重，属于批量候选提议设置，
-不是 K 次独立策略采样。专家原始下一观察来自演示轨迹，工具结果额外重放验证；
-候选对话动作重新调用同一配置的用户模拟器，因此用户响应存在随机性。
-所有错误工具返回均保留；不按 reward 自动筛选演示。导入轨迹应由实验者预先确认质量。
-如使用强模型生成候选/反思，应报告为 teacher-assisted EE；论文式 self 设置需使用
-将被训练的同一基座模型。反思长度提示为 200–400 词，软上限 500 词。
+Implementation choices: K=3 by default. One request proposes multiple candidates,
+which are deduplicated; this is batched candidate proposal rather than K independent
+policy samples. Expert next observations come from demonstration trajectories, with
+additional replay verification for tool outcomes. Alternative conversational actions
+call a user simulator with the same configuration, so user responses remain stochastic.
+All tool-error responses are retained. Demonstrations are not automatically filtered
+by reward; experimenters should verify the quality of imported trajectories first.
+If a stronger model generates alternatives or reflections, report the setting as
+teacher-assisted EE. The paper-style self setting uses the same base model that will
+be trained. Reflection prompts request 200-400 words, with a soft limit of 500 words.
 
-## 安装
+## Installation
 
-从仓库根目录运行。模块路径仍为 `tau2`，这是 τ³ 上游的包名。
+Run from the upstream repository root. The Python package remains `tau2`, following
+the upstream tau3 naming convention.
 
 ```bash
 uv sync --extra dev --extra voice --extra knowledge
-# PyAudio 编译需要系统 PortAudio 开发包（例如 portaudio-devel / portaudio19-dev）。
-# 训练依赖；PyTorch 的 CUDA 版本按训练机器安装：
+# Building PyAudio requires a system PortAudio development package,
+# such as portaudio-devel or portaudio19-dev.
+# Training dependencies; choose the PyTorch CUDA build for your training machine:
 uv pip install 'transformers==4.57.1' 'accelerate==1.11.0' torch
 .venv/bin/python -m experiments.early_experience --help
 ```
 
-此版本上游在文本入口中也加载部分 voice/knowledge 模块，因此仅 `uv sync`
-不足以运行。使用 `.venv/bin/python` 可避免后续 `uv run` 重新同步移除额外训练依赖。
-API key 通过环境变量配置，不要写进配置文件或 `--generator-args`。
-本模块不会自动启动训练服务器；使用 LiteLLM 支持的模型名与 `api_base` 接入模型。
+This upstream revision imports some voice/knowledge modules even through the text
+entry point, so `uv sync` alone is insufficient. Use `.venv/bin/python` to avoid a
+later `uv run` synchronization removing additional training dependencies.
+Configure API keys through environment variables, not configuration files or
+`--generator-args`. This module does not launch a model server automatically; use
+LiteLLM-supported model names and `api_base` to connect to your endpoints.
 
-## 1. 固定任务划分
+## 1. Fix the task split
 
 ```bash
 .venv/bin/python -m experiments.early_experience split \
   --domain retail --train-split train --eval-split test --output retail_split.json
 ```
 
-也可手动提供 `{"domain":"retail","train_ids":["..."],"eval_ids":["..."]}`。
-两组 ID 必须非空、无重复且不重叠。已经用 `train` 采样/训练时，不能再将含训练任务的
-`base` 全集作为无泄漏测试集。跨方法固定 split、模型、随机种子、用户模拟器和 trials。
+Alternatively, provide `{"domain":"retail","train_ids":["..."],"eval_ids":["..."]}`.
+Both ID lists must be nonempty, contain no duplicates, and have no overlap. After
+sampling or training on `train`, the full `base` set containing those training tasks
+cannot serve as a leakage-free test set. Keep splits, base models, seeds, user
+simulators, and trial counts fixed across methods.
 
-## 2. 采集或导入专家演示
+## 2. Collect or import expert demonstrations
 
-准备 `teacher.json`（模型名称仅为示例，应替换为实验所用模型）：
+Create `teacher.json`. The model names below are placeholders; replace them with
+the models used in your experiment.
 
 ```json
 {
@@ -75,15 +91,19 @@ API key 通过环境变量配置，不要写进配置文件或 `--generator-args
   --config teacher.json --split retail_split.json --output teacher_results.json
 ```
 
-该命令调用真实模型及原生评估器，会产生费用。已有原生 `Results` JSON 可直接进入下一步，
-但必须只含训练任务，并使用普通 `llm_agent` / `ee_agent` 和 `user_simulator`。
-不接受将 task 的 evaluation_criteria 当作可见输入的 GT agent。
-专家轨迹中初始脚本历史和默认问候仅作为上下文；其后的每个 assistant 决策均需实际下一观察，
-缺失结果或不能重放的轨迹会报错，不能被静默忽略。
+This command calls real models and the native evaluator and can incur charges.
+Existing native `Results` JSON can be used directly in the next step, provided it
+contains only training tasks and uses ordinary `llm_agent` / `ee_agent` and
+`user_simulator` implementations. GT agents exposing task `evaluation_criteria`
+as visible input are rejected.
+Initial scripted history and the default greeting are context only. Every subsequent
+assistant decision requires an actual next observation. Missing outcomes or
+non-replayable trajectories raise errors instead of being silently ignored.
 
-## 3. 真实分支采样、反思与导出
+## 3. Sample real branches, generate reflections, and export
 
-先用五个状态冒烟，检查 `transitions.jsonl` 的真实动作、返回值和反思内容：
+Start with a five-state smoke run. Inspect the actual actions, outcomes, and
+reflection text in `transitions.jsonl`.
 
 ```bash
 .venv/bin/python -m experiments.early_experience generate \
@@ -94,21 +114,27 @@ API key 通过环境变量配置，不要写进配置文件或 `--generator-args
 .venv/bin/python -m experiments.early_experience export --data ee_retail
 ```
 
-删除 `--max-states` 再运行即可继续。每个完整状态写入后立即 flush；重启时跳过已完成状态。
-配置与来源文件哈希不匹配会拒绝续跑。中断于状态内部时该状态需要重做；若文件存在半行，
-JSON 读取会报错，请保留备份后修复未完成的尾行。
+Remove `--max-states` and rerun to continue. Each completed state is flushed to disk,
+and completed states are skipped on restart. Resume is rejected if the configuration
+or source-file hash differs. An interrupted state must be regenerated. If a file
+contains a partial line, JSON parsing raises an error; back up the file before
+repairing its incomplete final line.
 
-每个状态约一次候选生成、K 次反思生成，另有候选对话动作带来的用户模拟调用。
-`--max-states` 限制的是本次新增状态数。完整运行前应基于冒烟 usage 估算成本。
-不足 K 个不同候选、生成被截断、用户工具循环超限都会明确报错。
+Each state requires approximately one candidate-generation call and K reflection
+calls, plus user-simulation calls for alternative conversational actions.
+`--max-states` limits newly added states in the current invocation. Estimate full-run
+costs from smoke-run usage. Fewer than K distinct candidates, truncated generation,
+or an excessive user-tool loop causes an explicit error.
 
-输出：`expert_sft.jsonl`、`iwm_sft.jsonl`、`reflection_sft.jsonl`，以及
-用于审计的 `transitions.jsonl`、`manifest.json`。SFT 保留原生多轮 messages 和结构化
-`tool_calls`；工具 schema 位于顶层 `tools`。IWM 只预测下一 agent 可见观察，不预测隐藏 DB。
+Outputs are `expert_sft.jsonl`, `iwm_sft.jsonl`, and `reflection_sft.jsonl`, with
+`transitions.jsonl` and `manifest.json` for auditing. SFT preserves native multi-turn
+messages and structured `tool_calls`; tool schemas are stored in the top-level
+`tools` field. IWM predicts the next agent-visible observation, not the hidden DB.
 
-## 4. 训练三组 baseline
+## 4. Train the three baselines
 
-每组均从**同一个原始基座 checkpoint**开始。IWM 命令内部执行两阶段：
+Start every method from **the same original base checkpoint**. The IWM command
+runs both stages internally.
 
 ```bash
 for method in il iwm sr; do
@@ -120,18 +146,22 @@ for method in il iwm sr; do
 done
 ```
 
-这是全参数 SFT。模型必须自带兼容工具调用的 Hugging Face chat template。
-只计算每条样本最后一个 assistant completion 的 loss；历史、用户和工具返回均 mask。
-过长样本直接报错，避免截断动作标签。IWM 第一阶段模型保存至 `iwm_warmup`，第二阶段
-继续相同模型参数并重建 optimizer。最终可部署模型为各目录下的 `final`。
-默认 epoch/LR 是可配置起点，不是论文 τ³ 推荐超参数。SR 默认每状态一条 IL 加 K 条 SR；
-IWM 多一次 warm-up，两者额外训练量应在实验报告中列出。
+This is full-parameter SFT. The model must provide a tool-compatible Hugging Face
+chat template. Loss is computed only on each example's final assistant completion;
+history, user messages, and tool outputs are masked. Overlong examples raise errors
+to avoid truncating action targets. IWM saves its first stage to `iwm_warmup`, then
+continues the same model weights with a fresh optimizer. Deployable final models
+are saved to each run's `final` directory.
+Default epochs and learning rate are configurable starting points, not paper-recommended
+tau3 hyperparameters. SR uses one IL example plus K SR examples per state by default;
+IWM adds a warm-up stage. Report their additional training volume in the experiment.
 
-## 5. 部署并使用原生 τ³ 评测
+## 5. Deploy and evaluate with native tau3
 
-把 `checkpoints/<method>/final` 部署到支持相应模型工具解析的 OpenAI-compatible 服务。
-在与 `teacher.json` 相同结构的 `eval.json` 中将 `llm_agent` 和 `api_base` 指向该服务，
-固定 `llm_user`、用户参数和 seed，并设置 `num_trials`（例如 4）。
+Deploy `checkpoints/<method>/final` to an OpenAI-compatible service supporting the
+model's tool-call parser. In `eval.json`, using the same structure as `teacher.json`,
+point `llm_agent` and `api_base` to that service. Fix `llm_user`, user parameters,
+and the seed, and set `num_trials`, for example to 4.
 
 ```bash
 .venv/bin/python -m experiments.early_experience evaluate \
@@ -139,15 +169,19 @@ IWM 多一次 warm-up，两者额外训练量应在实验报告中列出。
   --manifest ee_retail/manifest.json --output il_results.json
 ```
 
-对 IWM/SR 更换 endpoint 和输出文件，保留其他条件。命令强制使用测试 ID 并校验数据 manifest，
-通过原生 runner/evaluator 输出原生 Results 和指标。τ-bench 的 `pass^k` 表示 k 次均成功的
-一致性指标，不是至少成功一次的 `pass@k`。不在此模块重写奖励或成功判断。
+For IWM/SR, change the endpoint and output file while keeping other conditions fixed.
+The command enforces test IDs and validates the data manifest. It uses the native
+runner/evaluator to produce native Results and metrics. Tau-bench's `pass^k` measures
+consistency across k successful trials, unlike the at-least-one-success `pass@k` metric.
+This module does not redefine rewards or success criteria.
 
-三组均使用同一 `ee_agent` prompt。SR 的 `<think>...</think>` 在工具执行/发给用户前剥离，
-后续 history 也不保留私有反思，与数据构建时的可见历史一致。输出标签未闭合则报错。
-推理服务器必须保留模型生成的标签或按模型约定解析 reasoning，并正确解析工具调用。
+All three methods use the same `ee_agent` prompt. SR `<think>...</think>` text is
+removed before tool execution or delivery to the user. Subsequent history also
+omits private reflections, matching the visible history used during data generation.
+Unclosed tags raise an error. The inference server must preserve generated tags or
+parse reasoning according to the model's conventions, and correctly parse tool calls.
 
-## 离线验证
+## Offline validation
 
 ```bash
 .venv/bin/python -m pytest src/experiments/early_experience/tests -q
@@ -155,17 +189,20 @@ IWM 多一次 warm-up，两者额外训练量应在实验报告中列出。
 .venv/bin/ruff format --check src/experiments/early_experience
 ```
 
-测试使用真实 mock 环境工具，覆盖隔离、同批调用顺序、错误保留、私有信息不可见、
-反思与动作格式、训练 mask、任务划分与三组 curriculum。测试不调用付费 API。
+Tests use real mock-environment tools and cover isolation, within-batch call order,
+error retention, private-information visibility, reflection/action formatting,
+training masks, task splits, and all three curricula. Tests do not call paid APIs.
 
-参考：[方法定义](https://github.com/OSU-NLP-Group/EarlyExperience/blob/main/skill/METHOD.md)、
-[实现注意事项](https://github.com/OSU-NLP-Group/EarlyExperience/blob/main/skill/method_recap.md)、
-[论文](https://arxiv.org/abs/2510.08558)。
+References: [method definitions](https://github.com/OSU-NLP-Group/EarlyExperience/blob/main/skill/METHOD.md),
+[implementation notes](https://github.com/OSU-NLP-Group/EarlyExperience/blob/main/skill/method_recap.md),
+and [paper](https://arxiv.org/abs/2510.08558).
 
-### 本次验证记录
+### Recorded implementation validation
 
-- Python 3.12.14；14 项数据/环境/原生评估器测试通过。
-- retail、airline、telecom 的真实查询工具均已在隔离副本中执行并验证。
-- 3 项随机小模型 CPU 训练测试通过，覆盖 IL、IWM 两阶段权重更新、SR 混合训练。
-- Ruff lint/format 通过；retail 原生 train/test 为 74/40 个任务，无重叠。
-- 尚未调用真实生成模型进行数据采集，也未训练正式基座模型或产生正式 benchmark 分数。
+- Python 3.12.14; 14 data/environment/native-evaluator tests passed.
+- Real retail, airline, and telecom lookup tools were executed and verified in isolated copies.
+- Three randomly initialized tiny-model CPU training tests passed, covering IL,
+  two-stage IWM weight updates, and mixed SR training.
+- Ruff lint/format passed. The native retail train/test split contains 74/40 tasks with no overlap.
+- No real generator-model data collection, full-scale base-model training, or official
+  benchmark scoring has been run.

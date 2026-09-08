@@ -1,0 +1,15 @@
+{
+  "model": "Qwen/Qwen3-32B",
+  "base_url": "http://localhost:8000/v1",
+  "api_key_env": "EE_API_KEY",
+  "enable_thinking": false,
+  "temperature": 0.7,
+  "top_p": 0.8,
+  "max_tokens": 8192,
+  "timeout": 600,
+  "seed": 42,
+  "k_iwm": 10,
+  "k_sr": 3,
+  "reflection_words": 200,
+  "revision": "9216db5781bf21249d130ec9da846c4624c16137"
+}

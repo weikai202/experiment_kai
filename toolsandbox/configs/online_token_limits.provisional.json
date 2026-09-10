@@ -1,0 +1,1 @@
+{"schema_version":1,"status":"provisional","roles":[{"role":"policy","output_model_name":"ActionEnvelope","max_tokens":256},{"role":"critic","output_model_name":"CriticOutput","max_tokens":384},{"role":"revision","output_model_name":"ActionEnvelope","max_tokens":256}]}

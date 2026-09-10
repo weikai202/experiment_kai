@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "config_id": "toolsandbox-train-smoke-v1",
+  "formal": false,
+  "split": "train",
+  "selection": {
+    "family_ordinal": 0,
+    "variants": [
+      "no_distraction",
+      "three_distraction_tools"
+    ],
+    "reselection_from_outcomes_forbidden": true
+  },
+  "profile": "strict_replay",
+  "external_read_mode": "fixture",
+  "qwen_model": "Qwen/Qwen3-32B",
+  "qwen_enable_thinking": false,
+  "embedding_model": "text-embedding-3-small",
+  "user_simulator_model": "gpt-4o-mini-2024-07-18",
+  "artifact_namespace": "runs/smoke",
+  "publish_formal_generation": false,
+  "length_finish_reason_policy": "calibration_required"
+}

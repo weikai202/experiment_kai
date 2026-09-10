@@ -1,0 +1,15 @@
+{
+  "busy_timeout_ms": 0,
+  "checkpoint_protocol_version": "checkpoint-v1",
+  "database": "sqlite3",
+  "directory_mode": "0700",
+  "file_mode": "0600",
+  "foreign_keys": true,
+  "hash_algorithm": "sha256",
+  "journal_mode": "DELETE",
+  "max_blob_bytes": 268435456,
+  "max_checkpoint_bytes": 1073741824,
+  "schema_version": 1,
+  "single_writer": true,
+  "synchronous": "FULL"
+}

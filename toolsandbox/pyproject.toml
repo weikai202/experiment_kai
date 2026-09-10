@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "toolsandbox-pipeline"
+version = "0.1.0"
+description = "Auditable Policy-Controller-Critic pipeline for Apple ToolSandbox"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+  "httpx==0.27.2",
+  "openai==1.17.0",
+  "pydantic==2.7.4",
+  "tool-sandbox @ git+https://github.com/apple/ToolSandbox.git@165848b9a78cead7ca7fe7c89c688b58e6501219",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3,<9"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/toolsandbox_pipeline"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+testpaths = ["tests"]

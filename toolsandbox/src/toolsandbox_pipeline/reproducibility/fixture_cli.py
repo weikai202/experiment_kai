@@ -43,11 +43,13 @@ def _parser() -> argparse.ArgumentParser:
     preflight = subparsers.add_parser("preflight-fixtures")
     preflight.add_argument("--backend-config", required=True)
     preflight.add_argument("--fixture-manifest", required=True)
+    preflight.add_argument("--expected-backend-config-sha256")
     capture = subparsers.add_parser("capture-fixtures")
     capture.add_argument("--backend-config", required=True)
     capture.add_argument("--request-manifest", required=True)
     capture.add_argument("--expected-request-manifest-sha256", required=True)
     capture.add_argument("--output-dir", required=True)
+    capture.add_argument("--expected-backend-config-sha256")
     return parser
 
 
@@ -66,7 +68,8 @@ def _preflight(args: argparse.Namespace, *, monotonic=time.monotonic) -> int:
     started = monotonic()
     backend, backend_sha256 = load_backend_manifest(
         _absolute(args.backend_config),
-        expected_sha256=PINNED_BACKEND_CONFIG_SHA256,
+        expected_sha256=(getattr(args, "expected_backend_config_sha256", None)
+                         or sha256_bytes(_absolute(args.backend_config).read_bytes())),
     )
     fixture_path = _absolute(args.fixture_manifest)
     fixture_sha256 = sha256_bytes(fixture_path.read_bytes())
@@ -100,7 +103,8 @@ def _capture(
 ) -> int:
     backend, backend_sha256 = load_backend_manifest(
         _absolute(args.backend_config),
-        expected_sha256=PINNED_BACKEND_CONFIG_SHA256,
+        expected_sha256=(getattr(args, "expected_backend_config_sha256", None)
+                         or sha256_bytes(_absolute(args.backend_config).read_bytes())),
     )
     request_manifest = load_capture_request(
         _absolute(args.request_manifest),

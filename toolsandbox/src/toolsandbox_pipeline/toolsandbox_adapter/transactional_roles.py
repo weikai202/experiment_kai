@@ -37,6 +37,7 @@ from toolsandbox_pipeline.schemas.trajectory import (
 )
 
 from .pipeline_agent import PipelineAgent
+from .call_identity import execution_action
 from .trajectory_store import StoredContext, TrajectoryStore
 
 
@@ -111,7 +112,7 @@ class _CapturingResponder:
 
     def respond(self, turn: object):
         self.decision = self.responder.respond_decision(turn)
-        return self.decision.final_action
+        return execution_action(self.decision)
 
 
 class TransactionalAgentRole(EpisodeAgentRole):
@@ -245,6 +246,9 @@ class TransactionalExecutionEnvironment(BaseRole):
             self.delegate.respond(ending_index=ending_index)
             return
         binding = self.binding_provider(to_process)
+        if (all(message.sender is RoleType.AGENT for message in to_process)
+                and tuple(message.openai_tool_call_id for message in to_process) != binding.call_ids):
+            raise TransactionalRoleError("native message and binding execution IDs differ")
         if self.identity.profile == "offline" and "external_read" in binding.effect_classes:
             raise TransactionalRoleError("external reads are forbidden offline")
         pre_context = get_current_context()
@@ -331,7 +335,7 @@ class TransactionalExecutionEnvironment(BaseRole):
             self.delegate.respond(ending_index=ending_index)
         post_context = get_current_context()
         post = self.trajectory_store.persist_context(post_context)
-        result_rows = self._result_rows(post_context, before_index)
+        result_rows = self._result_rows(post_context, before_index, binding)
         failed = any(row.get("tool_call_exception") is not None for row in result_rows)
         visible_identity = canonical_sha256(result_rows)
         committed = self.tool_ledger.commit_attempt(
@@ -376,11 +380,26 @@ class TransactionalExecutionEnvironment(BaseRole):
         return tuple(selected)
 
     @staticmethod
-    def _result_rows(context: object, before_index: int) -> list[dict[str, object]]:
+    def _result_rows(context: object, before_index: int, binding: ToolActionBinding) -> list[dict[str, object]]:
         sandbox = context.get_database(
-            DatabaseNamespace.SANDBOX, drop_sandbox_message_index=False
+            DatabaseNamespace.SANDBOX, drop_sandbox_message_index=False,
+            get_all_history_snapshots=True,
         )
-        rows = sandbox.filter(pl.col("sandbox_message_index") > before_index).to_dicts()
+        user_control = all(effect == "conversation_control" for effect in binding.effect_classes)
+        recipient = RoleType.USER if user_control else RoleType.AGENT
+        selected = sandbox.filter(
+            (pl.col("sandbox_message_index") > before_index)
+            & (pl.col("sender") == RoleType.EXECUTION_ENVIRONMENT)
+            & (pl.col("recipient") == recipient)
+        )
+        # Native User control messages may omit their model call label. Agent
+        # tool results must always reference their exact host execution IDs.
+        matched = pl.col("openai_tool_call_id").is_in(binding.call_ids)
+        if user_control:
+            matched = matched | pl.col("openai_tool_call_id").is_null()
+        if selected.filter(~matched.fill_null(False)).height:
+            raise TransactionalRoleError("native result execution ID mismatch")
+        rows = selected.filter(matched).to_dicts()
         visible = []
         for row in rows:
             visible.append(
@@ -414,14 +433,8 @@ class TransactionalExecutionEnvironment(BaseRole):
     ) -> ToolActionRecord:
         from_context = get_current_context()
         indices = tuple(
-            int(value)
-            for value in from_context.get_database(
-                DatabaseNamespace.SANDBOX, drop_sandbox_message_index=False
-            )
-            .filter(pl.col("sandbox_message_index") > before_index)[
-                "sandbox_message_index"
-            ]
-            .to_list()
+            int(row["sandbox_message_index"])
+            for row in TransactionalExecutionEnvironment._result_rows(from_context, before_index, binding)
         )
         return ToolActionRecord(
             transaction_id=transaction_id,

@@ -156,7 +156,7 @@ CriticOutput
 
 `CriticErrorCode` contains every blocking code plus the five additional Section 13 codes. Requirements:
 
-- `predicted_effect` and `correction` contain at most 40 whitespace-delimited words each.
+- `predicted_effect` and `correction` contain at most 128 whitespace-delimited words each.
 - Empty strings are allowed only where the cross-field rules explicitly require them.
 - `accept` requires an empty error list and an empty correction.
 - `revise` requires at least one unique error code and a non-empty correction.
@@ -214,7 +214,7 @@ Tests must cover at least:
 2. missing/extra fields, scalar coercion, empty identifiers/content, invalid arguments, empty batches, and duplicate batch call IDs;
 3. every Controller enum value, missing evidence, orphan evidence, duplicate codes, and cross-list collision protection;
 4. every valid Critic verdict combination and every invalid cross-field combination;
-5. the 40-word boundary at exactly 40 and 41 whitespace-delimited words;
+5. the 128-word boundary at exactly 128 and 129 whitespace-delimited words;
 6. canonical key ordering, compact separators, UTF-8 Unicode preservation, nested values, and input immutability;
 7. rejection of NaN, infinity, non-string mapping keys, bytes, Decimal, datetime, and arbitrary objects;
 8. exact `sha256:` output against a fixed independently stated fixture;

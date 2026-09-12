@@ -106,3 +106,57 @@ def test_candidate_role_dispatches_once_with_frozen_qwen_fields_and_reuses_respo
     assert request["temperature"] == 0.0 and request["seed"] == 0
     assert request["max_tokens"] == 512 and "top_p" not in request
     assert request["extra_body"]["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+def test_packed_v2_request_preserves_original_and_dispatches_with_new_identity():
+    from toolsandbox_pipeline.offline.reflection_packing import unintern, unpack, VERSION
+    from toolsandbox_pipeline.reproducibility import canonical_sha256
+    original = projection()
+    original_json = original.model_dump_json()
+    prompts = load_memory_prompts(ROOT.resolve(), (ROOT / 'prompts/offline/memory_manifest.json').resolve())
+    limits, digest = load_token_limits((ROOT / 'configs/offline_memory_token_limits.provisional.json').resolve())
+    args = dict(unit_reference='memory-unit-v2', prompts=prompts, limits=limits,
+                limits_sha256=digest, structured_output_wire_mode='guided_json')
+    old = prepare_candidate_request(original, **args)
+    new = prepare_candidate_request(original, **args, input_representation='packed-v2')
+    envelope = json.loads(new.messages[1].content)
+    restored = unpack(unintern(envelope['trajectory_encoding']))
+    assert canonical_sha256(restored) == envelope['original_projection_sha256']
+    assert restored == original.model_dump(mode='json')
+    assert original.model_dump_json() == original_json
+    assert envelope['input_representation_version'] == VERSION
+    assert new.prompt_version == 'v2' and old.prompt_version == 'v1'
+    assert new.canonical_input_fingerprint != old.canonical_input_fingerprint
+    assert new.prompt_sha256 != old.prompt_sha256
+    transport = Transport()
+    runner = MemoryRoleRunner(QwenGateway(QwenConfig(structured_output_wire_mode='guided_json'), transport=transport), manifest_identity=DIGEST)
+    result = runner.run(new, context(new))
+    assert result.output.decision().result == 'CANDIDATE'
+    assert len(transport.requests) == 1
+    assert json.loads(transport.requests[0]['messages'][1]['content']) == envelope
+
+
+def test_candidate_wire_shapes_roundtrip_and_reject_null_payloads():
+    import pytest
+    from jsonschema import Draft202012Validator
+    from pydantic import ValidationError
+    from toolsandbox_pipeline.schemas.offline_memory import WorldMemoryCandidateDecision
+    for model, role, content in (
+        (PolicyMemoryCandidateDecision, 'policy', dict(scope='Prerequisites', applicability=[], action_guidance='Verify arguments', avoid=[])),
+        (WorldMemoryCandidateDecision, 'world', dict(action_pattern='Tool execution', state_conditions=[], schema_conditions=[], likely_error_codes=[], outcome_calibration='Check prerequisites', correction_principle='Verify arguments')),
+    ):
+        validator = Draft202012Validator(model.model_json_schema())
+        valid = [{'result': 'NONE'}, {'result': 'CANDIDATE', 'role': role, 'candidate': content}]
+        invalid = [dict(result='NONE', role=None), dict(result='NONE', candidate=None),
+                   dict(result='CANDIDATE', role=None, candidate=content),
+                   dict(result='CANDIDATE', role=role, candidate=None)]
+        for wire in valid:
+            validator.validate(wire)
+            parsed = model.model_validate_json(json.dumps(wire))
+            assert parsed.model_dump(mode='json') == wire
+            assert model.model_validate_json(parsed.model_dump_json()) == parsed
+            assert parsed.decision().result == wire['result']
+        for wire in invalid:
+            assert list(validator.iter_errors(wire))
+            with pytest.raises(ValidationError):
+                model.model_validate_json(json.dumps(wire))

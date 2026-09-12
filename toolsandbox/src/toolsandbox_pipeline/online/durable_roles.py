@@ -158,11 +158,10 @@ class LedgerQwenResponseSeam:
             raise RuntimeError("stored response context mismatch")
         model = CriticOutput if context.role is ProviderRole.CRITIC else ActionEnvelope
         value = model.model_validate(material.validated_output, strict=True)
-        return GatewayResponse(
-            value=value,
-            attempt=material.attempt,
-            raw_response_body=material.raw_response_body,
-        )
+        response = GatewayResponse(value=value, attempt=material.attempt,
+                                   raw_response_body=material.raw_response_body)
+        self._persist_call_identity(response, allow_legacy=True)
+        return response
 
     def persist_completed_response(self, response: GatewayResponse) -> None:
         if type(response) is not GatewayResponse:
@@ -170,12 +169,22 @@ class LedgerQwenResponseSeam:
         value = response.value
         if type(value) not in (ActionEnvelope, CriticOutput):
             raise TypeError("online role output required")
+        self._persist_call_identity(response, allow_legacy=False)
         self.ledger.complete_response(
             response,
             validated_output=value.model_dump(mode="json"),
             output_schema_name=type(value).__name__,
             output_schema_version=1,
         )
+
+
+    def _persist_call_identity(self, response, *, allow_legacy):
+        from toolsandbox_pipeline.toolsandbox_adapter.action_decode import audit_provider_action
+        audit = audit_provider_action(response, allow_legacy=allow_legacy)
+        if audit is not None:
+            checkpoint_id = 'action-call-identity-' + canonical_sha256([
+                audit['version'], audit['logical_request_id'], audit['source_attempt_id']])[7:]
+            self.ledger.commit_checkpoint(checkpoint_id, 'action_call_identity', audit)
 
 
 class Task011CheckpointEventSink:

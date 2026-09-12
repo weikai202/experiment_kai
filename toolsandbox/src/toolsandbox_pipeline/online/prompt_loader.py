@@ -25,8 +25,15 @@ class PromptEntry(FrozenRecord):
     role: Literal["policy", "critic", "revision"]
     path: str
     sha256: Digest
-    prompt_version: Literal["v1"]
+    prompt_version: Literal["v1", "v2", "v3", "v4"]
     output_model_name: Literal["ActionEnvelope", "CriticOutput"]
+
+
+    @model_validator(mode="after")
+    def version_role(self):
+        if self.prompt_version == "v2" and self.role != "critic":
+            raise ValueError("prompt v2 is restricted to Critic")
+        return self
 
 
 class PromptManifest(FrozenRecord):

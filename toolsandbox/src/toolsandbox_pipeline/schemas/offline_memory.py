@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from toolsandbox_pipeline.reproducibility import canonical_sha256
 from toolsandbox_pipeline.schemas.action import ActionEnvelope
@@ -197,10 +197,28 @@ class PolicyMemoryCandidateDecision(_FrozenStrict):
     role: Literal["policy"] | None = None
     candidate: PolicyMemoryCandidateContent | None = None
 
+    @classmethod
+    def model_json_schema(cls, *args, **kwargs):
+        candidate = PolicyMemoryCandidate.model_json_schema(*args, **kwargs)
+        definitions = candidate.pop("$defs", {})
+        return {"title": cls.__name__, "$defs": definitions, "anyOf": [
+            candidate, MemoryCandidateNone.model_json_schema(*args, **kwargs),
+        ]}
+
+    @model_serializer(mode="wrap")
+    def serialize_candidate(self, handler):
+        data = handler(self)
+        if self.result == "NONE":
+            data.pop("role", None)
+            data.pop("candidate", None)
+        return data
+
     @model_validator(mode="after")
     def conditional_fields(self) -> "PolicyMemoryCandidateDecision":
         expected = {"result"} if self.result == "NONE" else {"result", "role", "candidate"}
-        if self.model_fields_set != expected:
+        if self.model_fields_set != expected or (
+            self.result == "CANDIDATE" and (self.role is None or self.candidate is None)
+        ):
             raise ValueError("Policy candidate conditional fields mismatch")
         return self
 
@@ -218,10 +236,28 @@ class WorldMemoryCandidateDecision(_FrozenStrict):
     role: Literal["world"] | None = None
     candidate: WorldMemoryCandidateContent | None = None
 
+    @classmethod
+    def model_json_schema(cls, *args, **kwargs):
+        candidate = WorldMemoryCandidate.model_json_schema(*args, **kwargs)
+        definitions = candidate.pop("$defs", {})
+        return {"title": cls.__name__, "$defs": definitions, "anyOf": [
+            candidate, MemoryCandidateNone.model_json_schema(*args, **kwargs),
+        ]}
+
+    @model_serializer(mode="wrap")
+    def serialize_candidate(self, handler):
+        data = handler(self)
+        if self.result == "NONE":
+            data.pop("role", None)
+            data.pop("candidate", None)
+        return data
+
     @model_validator(mode="after")
     def conditional_fields(self) -> "WorldMemoryCandidateDecision":
         expected = {"result"} if self.result == "NONE" else {"result", "role", "candidate"}
-        if self.model_fields_set != expected:
+        if self.model_fields_set != expected or (
+            self.result == "CANDIDATE" and (self.role is None or self.candidate is None)
+        ):
             raise ValueError("World candidate conditional fields mismatch")
         return self
 
@@ -261,12 +297,31 @@ class MemoryReviewOutput(_FrozenStrict):
     target_memory_id: Identifier | None = None
     reason: Reason
 
+    @classmethod
+    def model_json_schema(cls, *args, **kwargs):
+        """Expose the existing conditional reviewer contract to constrained decoding."""
+        return {
+            "title": cls.__name__,
+            "anyOf": [
+                branch.model_json_schema(*args, **kwargs)
+                for branch in (MemoryReviewAdd, MemoryReviewMerge, MemoryReviewSkip)
+            ],
+        }
+
     @model_validator(mode="after")
     def conditional_target(self) -> "MemoryReviewOutput":
         expected = {"decision", "target_memory_id", "reason"} if self.decision == "MERGE" else {"decision", "reason"}
-        if self.model_fields_set != expected:
+        if self.model_fields_set != expected or (self.decision == "MERGE" and self.target_memory_id is None):
             raise ValueError("review target is allowed exactly for MERGE")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize_review(self, handler):
+        """Keep persisted JSON consistent with the validated conditional wire shape."""
+        data = handler(self)
+        if self.decision != "MERGE":
+            data.pop("target_memory_id", None)
+        return data
 
     def review(self) -> MemoryReviewAdd | MemoryReviewMerge | MemoryReviewSkip:
         if self.decision == "ADD":

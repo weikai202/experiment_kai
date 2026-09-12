@@ -160,3 +160,23 @@ def test_relative_and_symlink_paths_fail(tmp_path):
     payload["dataset_manifest_path"] = str(link)
     with pytest.raises(ValidationError, match="non-symlinks"):
         ResolvedRunManifest.model_validate(payload, strict=True)
+
+
+def test_live_v2_honestly_records_unverified_running_image(tmp_path):
+    data = manifest_payload(tmp_path, purpose='formal_training')
+    data.update(protocol_version='toolsandbox-evolution-live-v2', profile='official_live',
+                container_image_digest=None, registry_declared_digest=HASH, image_verification='unverified')
+    data['fixture']['mode'] = 'live'
+    data['qwen'].update(container_digest=None, registry_declared_digest=HASH, image_verification='unverified')
+    manifest = ResolvedRunManifest.model_validate(data)
+    assert manifest.model_dump(mode='json')['container_image_digest'] is None
+    assert manifest.qwen.container_digest is None
+    data['protocol_version'] = 'toolsandbox-evolution-v1'
+    with pytest.raises(ValidationError, match='v1 requires'):
+        ResolvedRunManifest.model_validate(data)
+
+
+def test_legacy_manifest_serialization_omits_new_image_defaults(tmp_path):
+    data = ResolvedRunManifest.model_validate(manifest_payload(tmp_path)).model_dump(mode='json')
+    assert 'image_verification' not in data and 'registry_declared_digest' not in data
+    assert 'image_verification' not in data['qwen'] and 'registry_declared_digest' not in data['qwen']

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "status": "calibration",
+  "development_only": true,
+  "roles": [
+    {
+      "role": "policy",
+      "output_model_name": "ActionEnvelope",
+      "max_tokens": 512
+    },
+    {
+      "role": "critic",
+      "output_model_name": "CriticOutput",
+      "max_tokens": 768
+    },
+    {
+      "role": "revision",
+      "output_model_name": "ActionEnvelope",
+      "max_tokens": 512
+    }
+  ]
+}

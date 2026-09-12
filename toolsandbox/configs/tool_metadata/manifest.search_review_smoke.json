@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "upstream_repository": "https://github.com/apple/ToolSandbox.git",
+  "upstream_commit": "165848b9a78cead7ca7fe7c89c688b58e6501219",
+  "record_count": 34,
+  "effect_counts": {
+    "sandbox_read": 17,
+    "sandbox_write": 11,
+    "external_read": 5,
+    "external_write": 0,
+    "conversation_control": 1
+  },
+  "metadata_sha256": "sha256:19d699c390504f81f85109ee6cfeb186e548a74669006d1352628c4992a9d8aa",
+  "public_inventory_sha256": "sha256:c478aad54c1ca361b9db4641cf25c718529016f686547f9c00dc328995c053a9",
+  "risk_policy": "effect-baseline-v1",
+  "generated_at_utc": "2026-09-04T00:00:00Z"
+}

@@ -8,19 +8,29 @@ from toolsandbox_pipeline.schemas.critic import CriticOutput
 from toolsandbox_pipeline.schemas.state import CompactVerifiedState
 from toolsandbox_pipeline.retrieval.service import PolicySkillRetrievalBundle, WorldRetrievalBundle
 from .prompt_contracts import (InitialPolicyContext, CriticContext, RevisionContext, PolicyMemoryPromptView,
-    WorldMemoryPromptView, PromptSafeControllerDecision, PromptSafeControllerEvidence, PromptMessage, PreparedRoleRequest)
+    WorldMemoryPromptView, PromptSafeControllerDecision, PromptSafeControllerEvidence, PromptMessage, PreparedRoleRequest, visible_argument_locations, mismatch_locations, feedback_skill_bindings)
 from .token_limits import select_limit
 
 
-def safe_controller(decision):
+def safe_controller(decision, proposed_action=None, *, retrieved_skills=()):
     if type(decision) is not ControllerDecision:
         raise TypeError("validated ControllerDecision required")
     decision = ControllerDecision.model_validate_json(decision.model_dump_json())
+    if proposed_action is not None and type(proposed_action) is not ActionEnvelope:
+        raise TypeError("validated ActionEnvelope required")
+    if proposed_action is not None:
+        proposed_action = ActionEnvelope.model_validate_json(proposed_action.model_dump_json())
+    locations = visible_argument_locations(proposed_action) if proposed_action is not None else {}
+    mismatches = mismatch_locations(proposed_action, retrieved_skills) if proposed_action is not None else {}
     return PromptSafeControllerDecision(
         blocking_codes=tuple(c.value for c in decision.blocking_codes),
         critic_trigger_codes=tuple(c.value for c in decision.critic_trigger_codes),
         evidence=tuple(PromptSafeControllerEvidence(code=e.code.value, source_kind=e.source_kind.value,
-            evidence_ref=canonical_sha256(e.model_dump(mode="json"))) for e in decision.evidence),
+            evidence_ref=canonical_sha256(e.model_dump(mode="json")),
+            action_pointer=(locations.get(e.source_ref) if e.source_kind.value in ("state", "schema") else
+                            mismatches.get(e.source_ref) if e.code.value == "CONSTRAINT_VIOLATION" and e.source_kind.value == "skill" else None),
+            reason="selected_skill_tool_mismatch" if (e.code.value == "CONSTRAINT_VIOLATION" and e.source_kind.value == "skill" and e.source_ref in mismatches) else None)
+            for e in decision.evidence),
     )
 
 
@@ -78,7 +88,7 @@ def critic_context(initial, action, decision, retrieval):
     state = CompactVerifiedState.model_validate_json(json.dumps(json.loads(initial.user_envelope)["state"]))
     if retrieval.query.key.input_sha256 != input_hash(world_query(state, action)):
         raise ValueError("World query does not match proposed action")
-    feedback = safe_controller(decision)
+    feedback = safe_controller(decision, action, retrieved_skills=json.loads(initial.user_envelope)["skills"])
     return CriticContext(initial=initial, proposed_action_json=action.model_dump_json(),
         proposed_action_sha256=canonical_sha256(json.loads(action.model_dump_json())), controller_feedback=feedback,
         controller_feedback_sha256=canonical_sha256(feedback.model_dump(mode="json")),
@@ -95,7 +105,7 @@ def audit_envelope(envelope, canonical_to_agent):
         function = tool["schema"].get("function", {})
         if function.get("name") != tool["name"] or tool["name"] in hidden_names:
             raise ValueError("augmented schema tool identity mismatch")
-    for skill in envelope.get("skills", []):
+    for skill in (*envelope.get("skills", []), *envelope.get("retrieved_skill_bindings", [])):
         if not set(skill["tool_dependencies"]) <= available:
             raise ValueError("unmapped Skill dependency")
     forbidden = {"source_ref", "sidecar", "controller_provenance_sidecar", "canonical_tool_name", "mapping",
@@ -125,10 +135,14 @@ def audit_envelope(envelope, canonical_to_agent):
 
 
 def fingerprint(role, messages, schema_hash, max_tokens, qwen):
-    return canonical_sha256(dict(provider=qwen.provider, model=qwen.model, role=role,
+    payload = dict(provider=qwen.provider, model=qwen.model, role=role,
         messages=[m.model_dump(mode="json") for m in messages], output_schema_sha256=schema_hash,
         max_tokens=max_tokens, temperature=0.0, seed=0, top_p="omitted", enable_thinking=False,
-        structured_output_wire_mode=qwen.structured_output_wire_mode))
+        structured_output_wire_mode=qwen.structured_output_wire_mode)
+    if role == "critic" and qwen.critic_structured_output_mode != "json_schema":
+        payload.update(critic_structured_output_mode=qwen.critic_structured_output_mode,
+                       critic_grammar_sha256=qwen.critic_grammar_sha256)
+    return canonical_sha256(payload)
 
 
 def prepare_request(context, *, prompt, token_limits, token_limit_config_sha256, qwen_config,
@@ -154,6 +168,12 @@ def prepare_request(context, *, prompt, token_limits, token_limit_config_sha256,
                     "controller_feedback": context.critic.controller_feedback.model_dump(mode="json"), "critic_feedback": json.loads(context.critic_feedback_json)}
     else:
         raise TypeError("strict role context required")
+    if role in ("critic", "revision"):
+        critic = context if role == "critic" else context.critic
+        bindings = feedback_skill_bindings(ActionEnvelope.model_validate_json(critic.proposed_action_json),
+                                          critic.controller_feedback, json.loads(initial.user_envelope)["skills"])
+        if bindings:
+            envelope["retrieved_skill_bindings"] = bindings
     if prompt.entry.role != role:
         raise ValueError("role/prompt mismatch")
     audit_envelope(envelope, canonical_to_agent)

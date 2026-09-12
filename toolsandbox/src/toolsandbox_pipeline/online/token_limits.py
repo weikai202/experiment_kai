@@ -28,6 +28,22 @@ class ProvisionalTokenLimits(FrozenRecord):
         return self
 
 
+class DevelopmentTokenLimits(FrozenRecord):
+    """Explicit smoke ceilings; no claim of measured formal calibration."""
+    schema_version: Literal[1]
+    status: Literal["calibration"]
+    development_only: Literal[True]
+    roles: tuple[RoleLimit, ...]
+
+    @model_validator(mode="after")
+    def layout(self):
+        if tuple((r.role, r.output_model_name) for r in self.roles) != tuple(zip(ROLES, ("ActionEnvelope", "CriticOutput", "ActionEnvelope"))):
+            raise ValueError("exact smoke role/schema order required")
+        if any(r.max_tokens % 64 for r in self.roles):
+            raise ValueError("smoke ceilings must be multiples of 64")
+        return self
+
+
 class RoleCalibration(FrozenRecord):
     role: Literal["policy", "critic", "revision"]
     bootstrap_max_tokens: Annotated[int, Field(gt=0)]
@@ -91,7 +107,7 @@ def load_token_limits(path, *, expected_sha256):
         raise ValueError("token config hash mismatch")
     import json
     status = json.loads(raw).get("status")
-    model = {"provisional": ProvisionalTokenLimits, "calibrated": CalibratedTokenLimits}.get(status)
+    model = {"provisional": ProvisionalTokenLimits, "calibration": DevelopmentTokenLimits, "calibrated": CalibratedTokenLimits}.get(status)
     if model is None:
         raise ValueError("unknown token config")
     return model.model_validate_json(raw)
@@ -100,6 +116,13 @@ def load_token_limits(path, *, expected_sha256):
 def select_limit(config, role, *, mode, qwen_config_sha256, prompt_sha256, schema_sha256):
     if mode not in ("offline", "calibration", "formal"):
         raise ValueError("invalid role mode")
+    if type(config) is DevelopmentTokenLimits:
+        if mode == "formal":
+            raise ValueError("formal runs require promoted calibration")
+        entry = config.roles[ROLES.index(role)]
+        return RoleTokenLimitConfig(version="online-smoke-v1", role=role, stage="calibration",
+                                   max_tokens=entry.max_tokens,
+                                   evidence_manifest_identity=canonical_sha256(config.model_dump(mode="json")))
     if type(config) is ProvisionalTokenLimits:
         if mode == "formal":
             raise ValueError("formal runs require promoted calibration")

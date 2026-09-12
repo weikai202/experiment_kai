@@ -431,6 +431,11 @@ def bind_executed_calls_to_turns(
             continue
         if seen_calls.intersection(action.call_ids):
             raise EpisodeRunnerError("tool call identity reused across turns")
+        # Native conversation termination belongs to the User role. Retain its
+        # transaction in the trajectory without inventing an Agent decision.
+        if action.is_user_conversation_control:
+            seen_calls.update(action.call_ids)
+            continue
         match = next(
             (
                 index

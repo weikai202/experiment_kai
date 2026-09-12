@@ -143,9 +143,11 @@ def action_projection(action: ActionEnvelope):
 
 
 def validate_input(text):
-    if type(text) is not str or not 1 <= len(text.encode("utf-8")) <= 8000:
-        raise RetrievalError("embedding input must contain 1..8000 UTF-8 bytes")
-    return text
+    from .long_inputs import validate_retrieval_input
+    try:
+        return validate_retrieval_input(text)
+    except ValueError as error:
+        raise RetrievalError(str(error)) from error
 
 
 def policy_query(state):

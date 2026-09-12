@@ -154,3 +154,69 @@ def test_formal_limit_is_not_a_request_override():
         gateway.generate(context(attempt_id="a2"), [{"role": "user", "content": "x"}], ActionEnvelope,
                          max_tokens=1024, token_limit_config=selected)
     assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize('role', [ProviderRole.CRITIC, ProviderRole.POLICY, ProviderRole.REVISION, ProviderRole.MEMORY_CANDIDATE])
+def test_critic_grammar_is_used_only_for_critic(role):
+    from toolsandbox_pipeline.providers.critic_grammar import build_critic_grammar
+    from tests.providers.test_runtime_config import grammar_config
+    critic = role is ProviderRole.CRITIC
+    content = ('{"verdict":"accept","predicted_outcome":"success","predicted_effect":"effect","error_codes":[],"correction":""}'
+               if critic else '{"action":{"type":"assistant_message","content":"ok"}}')
+    transport = FakeTransport(chat_response(content))
+    model = CriticOutput if critic else ActionEnvelope
+    result = QwenGateway(grammar_config(), transport=transport).generate(
+        context(role), [{'role': 'user', 'content': 'fixed input'}], model,
+        max_tokens=ROLE_BOOTSTRAP_MAX_TOKENS[role])
+    extra = transport.calls[0]['extra_body']
+    assert extra['structured_outputs'] == ({'grammar': build_critic_grammar()} if critic else {'json': model.model_json_schema()})
+    assert set(extra) == {'chat_template_kwargs', 'structured_outputs'}
+    assert result.attempt.finish_reason == 'stop'
+
+
+def test_critic_grammar_drift_fails_before_transport_and_never_falls_back(monkeypatch):
+    from toolsandbox_pipeline.providers import critic_grammar
+    from tests.providers.test_runtime_config import grammar_config
+    config = grammar_config()
+    monkeypatch.setattr(critic_grammar, 'build_critic_grammar', lambda: 'changed grammar')
+    transport = FakeTransport()
+    with pytest.raises(ProviderRequestError) as caught:
+        QwenGateway(config, transport=transport).generate(
+            context(ProviderRole.CRITIC), [{'role': 'user', 'content': 'x'}], CriticOutput, max_tokens=384)
+    assert caught.value.attempt.status.value == 'rejected_before_dispatch'
+    assert not transport.calls
+
+
+def test_critic_grammar_still_locally_rejects_duplicate_codes():
+    from tests.providers.test_runtime_config import grammar_config
+    content = '{"verdict":"revise","predicted_outcome":"failure","predicted_effect":"effect","error_codes":["UNGROUNDED_ARGUMENT","UNGROUNDED_ARGUMENT"],"correction":"Ground the argument."}'
+    transport = FakeTransport(chat_response(content))
+    with pytest.raises(ProviderRequestError) as caught:
+        QwenGateway(grammar_config(), transport=transport).generate(
+            context(ProviderRole.CRITIC), [{'role': 'user', 'content': 'x'}], CriticOutput, max_tokens=384)
+    assert len(transport.calls) == 1
+    assert caught.value.attempt.status.value == 'failed'
+
+
+def test_skill_candidate_strict_tuple_fields_accept_json_arrays():
+    from toolsandbox_pipeline.schemas.offline_skill import SkillContent, SkillContentCandidate
+    from tests.skills.test_records import skill
+    candidate = SkillContentCandidate(candidate=SkillContent.from_record(skill()))
+    transport = FakeTransport(chat_response(candidate.model_dump_json()))
+    result = QwenGateway(QwenConfig(structured_output_wire_mode='guided_json'), transport=transport).generate(
+        context(ProviderRole.SKILL_CANDIDATE), [{'role': 'user', 'content': 'synthetic candidate'}], SkillContentCandidate, max_tokens=2048)
+    assert result.value == candidate
+    assert isinstance(result.value.candidate.expected_outputs, tuple)
+
+
+@pytest.mark.parametrize('content', [
+    '{"candidate":{},"candidate":{}}',
+    '{"candidate":{"required_inputs":NaN}}',
+    '{"candidate":{"required_inputs":Infinity}}',
+])
+def test_skill_candidate_json_still_rejects_duplicate_and_nonfinite(content):
+    from toolsandbox_pipeline.schemas.offline_skill import SkillContentCandidate
+    with pytest.raises(ProviderRequestError):
+        QwenGateway(QwenConfig(structured_output_wire_mode='guided_json'),
+            transport=FakeTransport(chat_response(content))).generate(
+                context(ProviderRole.SKILL_CANDIDATE), [{'role': 'user', 'content': 'synthetic'}], SkillContentCandidate, max_tokens=2048)

@@ -267,3 +267,82 @@ def test_task011_backend_reconciles_unknown_attempt_with_new_id(real_ledger):
     assert recovered.source_attempt_id != abandoned.attempt_id
     assert runner.contexts[-1].replayed_after_unknown_outcome is True
     assert real_ledger.attempt_status(abandoned.attempt_id).value == "unknown_outcome"
+
+
+def test_offline_runner_persists_truncation_as_terminal_failure(real_ledger, tmp_path):
+    from tests.online.test_qwen_roles import Chat
+    from tests.online.test_prompt_builder import contexts, prepared as build_prepared
+    from toolsandbox_pipeline.online.qwen_roles import InitialPolicyRunner
+    from toolsandbox_pipeline.providers.qwen import QwenGateway
+    from toolsandbox_pipeline.providers.contracts import ProviderRequestError
+    from toolsandbox_pipeline.schemas.runtime import QwenConfig
+
+    backend, _ = real_backend(real_ledger)
+    request = build_prepared(contexts(tmp_path)[0], 0)
+    transport = Chat('{"action":', finish="length", tokens=request.max_tokens)
+    backend.runners["policy"] = InitialPolicyRunner(
+        QwenGateway(QwenConfig(structured_output_wire_mode="guided_json"), transport=transport),
+        manifest_identity=digest("d"), mode="offline",
+        durability_seam=LedgerQwenResponseSeam(real_ledger),
+    )
+    with pytest.raises(ProviderRequestError) as caught:
+        backend.execute(request)
+    error = caught.value
+    assert error.attempt.exception_class == "OutputTruncated"
+    assert error.raw_response_body == transport.raw_bodies[0]
+    assert error.attempt.metrics.usage.output_tokens == request.max_tokens
+    assert real_ledger.request_status(error.attempt.context.logical_request_id).value == "terminal_failure"
+    assert len(transport.calls) == 1
+
+
+def test_normalized_duplicate_batch_preserves_raw_and_restores_audit(real_ledger):
+    import json
+    from toolsandbox_pipeline.providers.qwen import QwenGateway
+    from toolsandbox_pipeline.schemas.runtime import QwenConfig
+    from tests.providers.test_request_identity import FakeTransport, chat_response
+    from tests.providers.test_action_decode import raw_batch
+    from toolsandbox_pipeline.toolsandbox_adapter.action_decode import ACTION_DECODE_VERSION
+    payload=chat_response(json.dumps(raw_batch()))
+    transport=FakeTransport(payload)
+    raw=json.dumps(payload).encode()
+    rid=real_ledger.prepare_request(LogicalLLMRequestIdentity(run_id='run-1',role=ProviderRole.POLICY,
+        phase='test',unit_reference='state',input_fingerprint=digest('a'),model='Qwen/Qwen3-32B',
+        decoding_configuration_sha256=digest('b'),output_schema_sha256=digest('c')))
+    ctx=real_ledger.allocate_attempt(rid.logical_request_id,manifest_identity=digest('3'),replayed_after_unknown_outcome=False)
+    real_ledger.mark_in_flight(ctx)
+    gateway=QwenGateway(QwenConfig(structured_output_wire_mode='guided_json'),transport=transport)
+    response=gateway.generate(ctx,[{'role':'user','content':'synthetic'}],ActionEnvelope,max_tokens=256)
+    seam=LedgerQwenResponseSeam(real_ledger);seam.persist_completed_response(response)
+    saved=real_ledger.load_completed_response_material(ctx.logical_request_id)
+    assert saved.raw_response_body==raw==response.raw_response_body
+    assert saved.attempt.response_hash=='sha256:'+sha256(raw).hexdigest()
+    restored=seam.load_completed_response(ctx)
+    assert restored.value==response.value and len(restored.value.action.calls)==2
+    assert len(transport.calls)==1
+    rows=real_ledger.store._connection.execute("SELECT checkpoint_id FROM checkpoint_events WHERE event_kind='action_call_identity'").fetchall()
+    assert len(rows)==1
+    audit=real_ledger.get_checkpoint(rows[0]['checkpoint_id']).payload
+    assert audit['version']==ACTION_DECODE_VERSION and audit['raw_response_sha256']==saved.attempt.response_hash
+    assert [call['model_call_id'] for call in audit['calls']]==['copied-exec-label']*2
+    assert [call['host_action_call_id'] for call in audit['calls']]==[call.call_id for call in response.value.action.calls]
+
+
+def test_legacy_completed_call_ids_restore_unchanged(real_ledger):
+    import json
+    from toolsandbox_pipeline.providers.qwen import QwenGateway
+    from toolsandbox_pipeline.schemas.runtime import QwenConfig
+    from tests.providers.test_request_identity import FakeTransport, chat_response
+    payload={'action':{'type':'function_call','call_id':'legacy-label','selected_skill_id':None,'name':'lookup','arguments':{'x':1}}}
+    rid=real_ledger.prepare_request(LogicalLLMRequestIdentity(run_id='run-1',role=ProviderRole.POLICY,
+        phase='legacy',unit_reference='state',input_fingerprint=digest('a'),model='Qwen/Qwen3-32B',
+        decoding_configuration_sha256=digest('b'),output_schema_sha256=digest('c')))
+    ctx=real_ledger.allocate_attempt(rid.logical_request_id,manifest_identity=digest('3'),replayed_after_unknown_outcome=False)
+    real_ledger.mark_in_flight(ctx)
+    response=QwenGateway(QwenConfig(structured_output_wire_mode='guided_json'),
+        transport=FakeTransport(chat_response(json.dumps(payload)))).generate(ctx,[{'role':'user','content':'legacy'}],ActionEnvelope,max_tokens=256)
+    old=ActionEnvelope.model_validate_json(json.dumps(payload))
+    real_ledger.complete_response(GatewayResponse(old,response.attempt,response.raw_response_body),
+        validated_output=old.model_dump(mode='json'),output_schema_name='ActionEnvelope',output_schema_version=1)
+    restored=LedgerQwenResponseSeam(real_ledger).load_completed_response(ctx)
+    assert restored.value.action.call_id=='legacy-label'
+    assert real_ledger.store._connection.execute("SELECT COUNT(*) FROM checkpoint_events WHERE event_kind='action_call_identity'").fetchone()[0]==0

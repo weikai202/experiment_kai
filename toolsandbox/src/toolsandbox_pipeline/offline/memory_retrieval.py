@@ -101,9 +101,27 @@ class MemoryCandidateRetriever:
         if record.status != "active":
             raise RetrievalError("only active staged memory is searchable")
         vector = validate_vector(semantic_vector)
-        existing = self._staged[role].get(record.memory_id)
+        existing = self._staged[role].get(record.memory_id) or self._current[role].get(record.memory_id)
+        if existing is not None and vector != self._vectors[record.memory_id]:
+            raise RetrievalError("conflicting staged memory vector")
         if existing is not None and existing != record:
-            raise RetrievalError("conflicting staged memory identity")
+            # A same-round MERGE retains semantics and adds exactly one evidence
+            # item. Reject replacement content, rollback, and vector drift.
+            rate_field = "success_rate" if role == "policy" else "empirical_failure_rate"
+            mutable = {"evidence_trajectory_ids", "support_count", "confidence", rate_field}
+            old_evidence = set(existing.evidence_trajectory_ids)
+            new_evidence = set(record.evidence_trajectory_ids)
+            added_label = (getattr(record, rate_field) * record.support_count
+                           - getattr(existing, rate_field) * existing.support_count)
+            if (
+                existing.model_dump(exclude=mutable) != record.model_dump(exclude=mutable)
+                or record.support_count != existing.support_count + 1
+                or not old_evidence < new_evidence
+                or len(new_evidence - old_evidence) != 1
+                or min(abs(added_label), abs(added_label - 1)) > 1e-9
+                or vector != self._vectors[record.memory_id]
+            ):
+                raise RetrievalError("conflicting staged memory identity")
         self._staged[role][record.memory_id] = record
         self._vectors[record.memory_id] = vector
 

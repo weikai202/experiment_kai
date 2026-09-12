@@ -1,5 +1,6 @@
 """Hash-only projections of native context/evaluator definitions. Never log input."""
 import copy
+from functools import partial
 from enum import Enum
 import importlib
 import inspect
@@ -78,7 +79,29 @@ def context_sha256(context):
     return digest
 
 
+def _bound_identity(value):
+    # Bindings are data, not executable serialization. Tag container and callable
+    # types so distinct bindings cannot collapse to one canonical identity.
+    if type(value) is partial or inspect.isfunction(value):
+        return {"callable": _callable_identity(value)}
+    if type(value) in (tuple, list):
+        return {type(value).__name__: [_bound_identity(item) for item in value]}
+    if type(value) is dict:
+        if any(type(key) is not str for key in value):
+            raise ValueError("unsupported partial binding key")
+        return {"dict": [[key, _bound_identity(value[key])] for key in sorted(value)]}
+    if type(value) is float and math.isinf(value):
+        return {"float_infinity": "+" if value > 0 else "-"}
+    return {"scalar": _json(value)}
+
+
 def _callable_identity(function):
+    if type(function) is partial:
+        if function.__dict__:
+            raise ValueError("customized evaluator partial")
+        return {"partial": _callable_identity(function.func),
+                "args": _bound_identity(function.args),
+                "keywords": _bound_identity(function.keywords)}
     if not inspect.isfunction(function) or function.__closure__ or "<" in function.__qualname__ or not function.__module__.startswith("tool_sandbox."):
         raise ValueError("unsafe evaluator callable")
     target = importlib.import_module(function.__module__)

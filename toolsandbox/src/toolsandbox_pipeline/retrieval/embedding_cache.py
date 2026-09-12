@@ -8,9 +8,11 @@ from toolsandbox_pipeline.schemas.usage import TokenUsage
 from toolsandbox_pipeline.providers.contracts import PhysicalAttemptStatus, ProviderRole, RequestContext
 from .contracts import EmbeddingBatchConfig, EmbeddingCacheKey, EmbeddingIdentity, ResolvedEmbedding, RetrievalError, validate_vector
 from .queries import input_hash, validate_input
+from .long_inputs import chunks, aggregate, STRATEGY
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _TABLES = {
+    "derivations": "CREATE TABLE derivations (input_sha256 TEXT PRIMARY KEY, strategy TEXT NOT NULL, chunk_hashes_json TEXT NOT NULL, token_weights_json TEXT NOT NULL)",
     "provenance": "CREATE TABLE provenance (attempt_id TEXT PRIMARY KEY, usage_json TEXT NOT NULL, response_hash TEXT NOT NULL)",
     "vectors": "CREATE TABLE vectors (provider TEXT NOT NULL, base_url_identity TEXT NOT NULL, model TEXT NOT NULL, encoding_format TEXT NOT NULL, dimensions_setting TEXT NOT NULL, input_sha256 TEXT NOT NULL, dimension INTEGER NOT NULL, vector_json TEXT NOT NULL, vector_hash TEXT NOT NULL, response_hash TEXT NOT NULL, attempt_id TEXT NOT NULL REFERENCES provenance(attempt_id), PRIMARY KEY(provider, base_url_identity, model, encoding_format, dimensions_setting, input_sha256))",
 }
@@ -34,7 +36,7 @@ class EmbeddingCache:
                 with self._db:
                     for sql in _TABLES.values():
                         self._db.execute(sql)
-                    self._db.execute("PRAGMA user_version=1")
+                    self._db.execute("PRAGMA user_version=2")
             elif version != SCHEMA_VERSION or tables != _TABLES:
                 raise RetrievalError("unknown cache schema")
             self._db.execute("PRAGMA foreign_keys=ON")
@@ -70,6 +72,12 @@ class EmbeddingCache:
         from toolsandbox_pipeline.schemas.memory import Digest
         TypeAdapter(Digest).validate_python(response_hash)
         TokenUsage.model_validate_json(provenance[0])
+        derivation = self._db.execute("SELECT strategy,chunk_hashes_json,token_weights_json FROM derivations WHERE input_sha256=?", (key.input_sha256,)).fetchone()
+        if derivation is None or derivation[0] != STRATEGY:
+            raise RetrievalError("missing or incompatible vector derivation")
+        hashes, weights = json.loads(derivation[1]), json.loads(derivation[2])
+        if not hashes or len(hashes) != len(weights) or any(type(w) is not int or w <= 0 for w in weights):
+            raise RetrievalError("invalid vector derivation")
         return ResolvedEmbedding(key=key, vector=vector, cache_hit=True, source_attempt_id=attempt_id)
 
     def resolve(self, inputs, *, gateway, context_factory, record_durable):
@@ -93,18 +101,23 @@ class EmbeddingCache:
                     resolved[digest] = hit
                 else:
                     misses[digest] = text
-        batches, batch, size = [], [], 0
+        pieces = {digest: chunks(text) for digest, text in misses.items()}
+        batches, batch, size, item_count = [], [], 0, 0
         for digest, text in misses.items():
             length = len(text.encode("utf-8"))
-            if batch and (len(batch) == self.batches.max_items or size + length > self.batches.max_bytes):
+            count = len(pieces[digest][0])
+            if count > self.batches.max_items or length > self.batches.max_bytes:
+                raise RetrievalError("one input exceeds configured embedding batch resources")
+            if batch and (item_count + count > self.batches.max_items or size + length > self.batches.max_bytes):
                 batches.append(batch)
-                batch, size = [], 0
+                batch, size, item_count = [], 0, 0
             batch.append((digest, text))
             size += length
+            item_count += count
         if batch:
             batches.append(batch)
         for ordinal, batch in enumerate(batches):
-            batch_text = [text for _, text in batch]
+            batch_text = [piece for digest, _ in batch for piece in pieces[digest][0]]
             context = context_factory(ordinal, tuple(batch_text))
             if type(context) is not RequestContext or context.role is not ProviderRole.EMBEDDING:
                 raise RetrievalError("prepared embedding RequestContext required")
@@ -115,14 +128,22 @@ class EmbeddingCache:
             # The caller's authoritative ledger must be durable even if cache validation fails.
             if record_durable(response) is not True:
                 raise RetrievalError("durable ledger acknowledgement required")
-            if len(response.value) != len(batch):
+            if len(response.value) != len(batch_text):
                 raise RetrievalError("partial embedding response")
-            vectors = tuple(validate_vector(v, self.dimension) for v in response.value)
+            raw_vectors = tuple(validate_vector(v, self.dimension) for v in response.value)
+            vectors, offset = [], 0
+            for digest, _ in batch:
+                weights = pieces[digest][1]
+                vectors.append(validate_vector(aggregate(raw_vectors[offset:offset+len(weights)], weights), self.dimension))
+                offset += len(weights)
             usage = canonical_json_bytes(attempt.metrics.usage.model_dump(mode="json")).decode()
             with self._db:
                 self._db.execute("INSERT INTO provenance VALUES (?,?,?)", (context.attempt_id, usage, attempt.response_hash))
                 for (digest, text), vector in zip(batch, vectors):
                     key = self.key(text)
+                    chunk_texts, weights = pieces[digest]
+                    self._db.execute("INSERT INTO derivations VALUES (?,?,?,?)", (
+                        digest, STRATEGY, json.dumps([input_hash(t) for t in chunk_texts]), json.dumps(weights)))
                     self._db.execute("INSERT INTO vectors VALUES (?,?,?,?,?,?,?,?,?,?,?)", (
                         *key.model_dump().values(), self.dimension,
                         canonical_json_bytes(list(vector)).decode(), canonical_sha256(list(vector)),

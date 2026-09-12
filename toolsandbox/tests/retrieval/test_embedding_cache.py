@@ -63,7 +63,7 @@ def test_byte_and_item_batch_boundaries(tmp_path):
         assert [len(r["input"]) for r in transport.calls] == [35, 1]
         before = len(transport.calls)
         with pytest.raises(ValueError):
-            cache.resolve(["x" * 8001], **kwargs)
+            cache.resolve(["x" * 280001], **kwargs)
         assert len(transport.calls) == before
     transport, _, kwargs = dependencies()
     with EmbeddingCache(tmp_path / "count", EmbeddingIdentity(), 2) as cache:

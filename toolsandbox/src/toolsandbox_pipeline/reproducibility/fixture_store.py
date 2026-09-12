@@ -62,6 +62,10 @@ EXPECTED_BACKENDS = (
     ),
 )
 PINNED_BACKEND_CONFIG_SHA256 = "sha256:6259ca87dabb2f128a44837e1c7732431e660c2df659169cf3bd56ff67844fe3"
+FRANKFURTER_BACKEND_CONFIG_SHA256 = "sha256:b64a3f53388444fde4e17834fad12b1cbbac58d3afb43cecf289f011688193a4"
+FRANKFURTER_BACKENDS = ((EXPECTED_BACKENDS[0][0], "frankfurter-v2-rate-v1", *EXPECTED_BACKENDS[0][2:]), *EXPECTED_BACKENDS[1:])
+APPROVED_BACKEND_CONFIGS = {PINNED_BACKEND_CONFIG_SHA256: EXPECTED_BACKENDS,
+                            FRANKFURTER_BACKEND_CONFIG_SHA256: FRANKFURTER_BACKENDS}
 _SECRET_KEY_PARTS = frozenset(
     {"authorization", "cookie", "cookies", "header", "headers", "key", "secret", "token", "x-rapidapi-key"}
 )
@@ -155,10 +159,10 @@ def load_backend_manifest(path: str | Path, *, expected_sha256: str) -> tuple[Ra
         for item in manifest.backends
     )
     if (
-        actual != EXPECTED_BACKENDS
+        actual != APPROVED_BACKEND_CONFIGS.get(actual_sha256)
         or manifest.upstream_commit != UPSTREAM_COMMIT
         or manifest.request_timeout_seconds != 30.0
-        or actual_sha256 != PINNED_BACKEND_CONFIG_SHA256
+        or actual_sha256 not in APPROVED_BACKEND_CONFIGS
     ):
         raise FixtureValidationError("pinned RapidAPI backend contract drift")
     return manifest, actual_sha256
@@ -174,6 +178,11 @@ def backend_by_name(manifest: RapidAPIBackendManifest, name: str) -> BackendReco
 
 
 def request_url_identity(record: BackendRecord) -> str:
+    if record.backend_version == "frankfurter-v2-rate-v1":
+        from toolsandbox_pipeline.toolsandbox_adapter.currency_backend import ENDPOINT_TEMPLATE, BACKEND_VERSION
+        return canonical_sha256({"method": record.method, "provider_endpoint": ENDPOINT_TEMPLATE,
+            "provider_authentication": "none", "backend_version": BACKEND_VERSION,
+            "native_interception_url": record.url, "native_interception_host": record.host})
     return canonical_sha256({"method": record.method, "url": record.url, "host": record.host})
 
 

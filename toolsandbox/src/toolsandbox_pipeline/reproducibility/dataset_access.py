@@ -27,11 +27,18 @@ class ScenarioLease:
 
 
 class DatasetAccessGate:
-    def __init__(self, *, manifest_path, expected_manifest_sha256, reconstruct, audit, hash_scenario=None):
+    def __init__(self, *, manifest_path, expected_manifest_sha256, reconstruct, audit, hash_scenario=None,
+                 execution_attestation=None, verify_execution_attestation=None):
         self.manifest_path = Path(manifest_path)
         self.expected_manifest_sha256 = expected_manifest_sha256
         self.reconstruct = reconstruct
         self.audit = audit
+        if (execution_attestation is None) != (verify_execution_attestation is None):
+            raise TypeError("v2 execution evidence and verifier must be supplied together")
+        if execution_attestation is not None and (type(execution_attestation) is not dict or not callable(verify_execution_attestation)):
+            raise TypeError("explicit v2 execution evidence and callable verifier required")
+        self.execution_attestation = copy.deepcopy(execution_attestation)
+        self.verify_execution_attestation = verify_execution_attestation
         if hash_scenario is None:
             from .scenario_hashes import scenario_hashes
             hash_scenario = scenario_hashes
@@ -59,9 +66,24 @@ class DatasetAccessGate:
                 index_path = path.parent / "dataset_index.json"
                 if index_path.is_symlink():
                     raise DatasetAccessError("invalid dataset index path")
-                index = DatasetIndex.model_validate_json(index_path.read_bytes())
-                if index.status != "complete" or index.train_manifest_sha256 != manifest_sha256 or index.environment_sha256 != manifest.environment_sha256:
-                    raise DatasetAccessError("formal train requires a complete pinned environment")
+                index_raw = index_path.read_bytes()
+                index = DatasetIndex.model_validate_json(index_raw)
+                if index.train_manifest_sha256 != manifest_sha256 or index.environment_sha256 != manifest.environment_sha256:
+                    raise DatasetAccessError("formal train manifest/build environment mismatch")
+                evidence = self.execution_attestation
+                if evidence is None:
+                    if index.status != "complete":
+                        raise DatasetAccessError("formal train requires a complete pinned environment")
+                else:
+                    if (evidence.get('version') != 'dataset-build-execution-environment-v2'
+                            or evidence.get('dataset_index_sha256') != file_hash(index_raw)
+                            or evidence.get('dataset_build_status') != index.status
+                            or evidence.get('dataset_build_environment_sha256') != index.environment_sha256
+                            or evidence.get('dataset_build_environment') != index.environment.model_dump(mode='json')):
+                        raise DatasetAccessError("v2 execution evidence does not match immutable dataset build")
+                    if self.verify_execution_attestation(copy.deepcopy(evidence), dataset_index_path=index_path,
+                            expected_dataset_index_sha256=file_hash(index_raw)) is not True:
+                        raise DatasetAccessError("current v2 execution environment is not verified")
             by_id = {r.scenario_id: r for r in manifest.scenarios}
             chosen = set(ids)
             if any(sid not in by_id for sid in ids) or tuple(r.scenario_id for r in manifest.scenarios if r.scenario_id in chosen) != request.requested_ids:

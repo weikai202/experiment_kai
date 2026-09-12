@@ -70,7 +70,16 @@ class QwenGateway:
                 raise ValueError("role output schema mismatch")
             extra = {"chat_template_kwargs": {"enable_thinking": False}}
             schema = output_model.model_json_schema()
-            if self.config.structured_output_wire_mode == "guided_json":
+            if (context.role is ProviderRole.CRITIC
+                    and self.config.critic_structured_output_mode != "json_schema"):
+                self.config.validate_critic_structured_output()
+                from hashlib import sha256
+                from toolsandbox_pipeline.providers.critic_grammar import build_critic_grammar
+                grammar = build_critic_grammar()
+                if "sha256:" + sha256(grammar.encode("utf-8")).hexdigest() != self.config.critic_grammar_sha256:
+                    raise ValueError("Critic dispatched grammar hash mismatch")
+                extra["structured_outputs"] = {"grammar": grammar}
+            elif self.config.structured_output_wire_mode == "guided_json":
                 extra["guided_json"] = schema
             else:
                 extra["structured_outputs"] = {"json": schema}
@@ -103,11 +112,15 @@ class QwenGateway:
                 raise ValueError("invalid non-thinking content")
             if message.get("tool_calls") or message.get("function_call"):
                 raise ValueError("native tool calling forbidden")
-            parsed = json.loads(content, object_pairs_hook=_unique_object,
+            json.loads(content, object_pairs_hook=_unique_object,
                                 parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite JSON")))
-            return ValidatedProviderResponse(
-                value=output_model.model_validate(parsed), finish_reason=finish_reason
-            )
+            from toolsandbox_pipeline.schemas.action import ActionEnvelope
+            if output_model is ActionEnvelope:
+                from toolsandbox_pipeline.toolsandbox_adapter.action_decode import decode_action
+                value = decode_action(content, context).action
+            else:
+                value = output_model.model_validate_json(content)
+            return ValidatedProviderResponse(value=value, finish_reason=finish_reason)
 
         return physical_request(context, self.config.served_model_id or self.config.model,
                                 prepare=prepare, validate=validate, recorder=self.recorder)

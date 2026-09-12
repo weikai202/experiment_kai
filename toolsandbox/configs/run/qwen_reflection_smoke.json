@@ -1,0 +1,22 @@
+{
+  "timeout_seconds": 120.0,
+  "provider": "vllm_openai_compatible",
+  "model": "Qwen/Qwen3-32B",
+  "temperature": 0.0,
+  "seed": 0,
+  "enable_thinking": false,
+  "structured_output_wire_mode": "structured_outputs_json",
+  "critic_structured_output_mode": "ordered_unique_grammar_v1",
+  "critic_grammar_sha256": "sha256:2ea927db043ebde93c5a645fb4c42f790a9f524e8ba321429aa33459e112dee4",
+  "base_url_env": "QWEN_BASE_URL",
+  "api_key_env": "QWEN_API_KEY",
+  "allow_empty_local_key": true,
+  "expected_vllm_version": "0.11.2",
+  "container_digest": "sha256:b33031a5bd07fdc13d7af931ef2d7708b8e0bea5d5b83c16a5702eeae781f9fe",
+  "served_model_id": "Qwen/Qwen3-32B",
+  "structured_output_backend": "xgrammar",
+  "generation_config_policy": "vllm",
+  "server_launch_configuration": "#!/bin/bash\n. /opt/supervisor-scripts/utils/logging.sh\n. /opt/supervisor-scripts/utils/environment.sh\nunset OPENAI_API_KEY QWEN_API_KEY HF_TOKEN\nexport HF_HUB_OFFLINE=1\nexport OMP_NUM_THREADS=8\nexec /root/toolsandbox-runtime/vllm-env/bin/vllm serve /root/toolsandbox-runtime/models/Qwen3-32B --served-model-name Qwen/Qwen3-32B --host 127.0.0.1 --port 18080 --dtype bfloat16 --max-model-len 32768 --gpu-memory-utilization 0.9 --max-num-seqs 2 --generation-config vllm --structured-outputs-config '{\"backend\":\"xgrammar\",\"disable_fallback\":true,\"disable_any_whitespace\":true}'  --enforce-eager --disable-log-requests\n",
+  "context_limit": 32768,
+  "output_limit": 2048
+}

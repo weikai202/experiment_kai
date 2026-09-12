@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "formal": false,
+  "development_only": true,
+  "split": "train",
+  "scope": "policy_memory",
+  "rounds": 1,
+  "scenario_ids": [
+    "search_message_with_recency_latest_multiple_user_turn_alt",
+    "search_message_with_recency_latest_multiple_user_turn_alt_3_distraction_tools"
+  ],
+  "generation_order": [
+    "g000",
+    "g001"
+  ],
+  "comparison": "same_train_retest_not_generalization",
+  "world_reflection": false,
+  "skill_rewrite": false,
+  "online_limits": "configs/online_token_limits.smoke.json",
+  "offline_limits": "configs/offline_memory_token_limits.provisional.json",
+  "tool_metadata": "configs/tool_metadata/controller_tool_metadata.search_review_smoke.jsonl",
+  "tool_metadata_manifest": "configs/tool_metadata/manifest.search_review_smoke.json",
+  "settings_experiment": "search_messages_critic_required_v1"
+}

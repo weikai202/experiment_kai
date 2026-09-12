@@ -22,7 +22,7 @@ def test_evaluator_hash_and_unsafe_callable():
         return Evaluation(milestone_matcher=MilestoneMatcher(milestones=[Milestone(snapshot_constraints=[constraint], guardrail_database_list=[])]))
     assert evaluator_sha256(build(snapshot_similarity)) == evaluator_sha256(build(snapshot_similarity))
     assert evaluator_sha256(build(snapshot_similarity)) != evaluator_sha256(build(snapshot_similarity, 2))
-    for function in (lambda **kw: 1, partial(snapshot_similarity), len):
+    for function in (lambda **kw: 1, partial(len), len):
         with pytest.raises(ValueError):
             evaluator_sha256(build(function))
 
@@ -53,3 +53,30 @@ def test_evaluator_row_order_dtype_and_nonfinite():
     assert baseline != evaluator_sha256(build(table.cast({"synthetic": pl.Float64})))
     with pytest.raises(ValueError):
         evaluator_sha256(build(pl.DataFrame({"synthetic": [float("nan")]})))
+
+
+def test_upstream_partial_identity_preserves_bindings_and_rejects_unsafe_values():
+    from toolsandbox_pipeline.reproducibility.scenario_hashes import _callable_identity
+    from tool_sandbox.common.evaluation import tool_trace_dependant_similarity
+    first = partial(tool_trace_dependant_similarity, column_similarity_measure={"synthetic": snapshot_similarity})
+    assert _callable_identity(first) == _callable_identity(copy.deepcopy(first))
+    assert _callable_identity(first) != _callable_identity(partial(tool_trace_dependant_similarity))
+    assert _callable_identity(partial(snapshot_similarity, [1, 2])) != _callable_identity(partial(snapshot_similarity, (1, 2)))
+    assert _callable_identity(partial(snapshot_similarity, tolerance=1)) != _callable_identity(partial(snapshot_similarity, tolerance=2))
+    for value in (lambda: None, len, object(), float("nan")):
+        with pytest.raises(ValueError):
+            _callable_identity(partial(snapshot_similarity, binding=value))
+    decorated = partial(snapshot_similarity)
+    decorated.extra = True
+    with pytest.raises(ValueError):
+        _callable_identity(decorated)
+
+
+def test_partial_infinite_tolerance_is_tagged_without_nonfinite_json():
+    import json
+    from toolsandbox_pipeline.reproducibility.scenario_hashes import _callable_identity
+    positive = _callable_identity(partial(snapshot_similarity, tolerance=float("inf")))
+    negative = _callable_identity(partial(snapshot_similarity, tolerance=float("-inf")))
+    text = _callable_identity(partial(snapshot_similarity, tolerance="+"))
+    assert positive != negative and positive != text
+    json.dumps(positive, allow_nan=False)

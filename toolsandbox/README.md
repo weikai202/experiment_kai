@@ -83,9 +83,10 @@ uv run python -m toolsandbox_pipeline.reporting.cli verify-report --help
 
 Offline validation/build/query commands need no credentials. Model-backed smoke,
 training, and one-time final evaluation run only through the reviewed
-coordinator-owned launcher and immutable manifests. That production launcher and
-its full runtime composition are intentionally not checked into this repository;
-without an injected reviewed operation map, model-backed subcommands fail closed.
+coordinator-owned launcher and immutable manifests. The current instance launcher and supervisor templates are included in
+`scripts/runtime/`; see `docs/RUNTIME_DEPLOYMENT.md` for their fixed paths,
+external prerequisites, and validation status. Generic CLI operations still fail
+closed without an injected reviewed operation map.
 A fake-client test is not a real-model result, and a train smoke is not a final
 dataset result.
 
@@ -94,3 +95,12 @@ dataset result.
 `pipeline.md` is authoritative. `AGENTS.md` defines ownership and access
 boundaries, and `tasks/001_*.md` through `tasks/018_*.md` contain the reviewed
 implementation contracts and acceptance checks.
+
+## Live runtime snapshot
+
+This snapshot includes the full live bootstrap, online/offline calibration,
+three-round training composition, native Dev validation, Frankfurter currency
+backend, host-assigned call IDs with raw-output audit, and lock-free progress
+monitoring. Full end-to-end completion is not yet verified: the latest live campaign completed 29 calibration episodes, then stopped on
+a Policy output truncation before offline calibration or formal training. See
+[deployment instructions](docs/RUNTIME_DEPLOYMENT.md).

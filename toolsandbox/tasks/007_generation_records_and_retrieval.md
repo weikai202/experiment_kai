@@ -323,7 +323,7 @@ IDs, evidence IDs, statistics, confidence, generation, version, status, validati
 failure buffers, and canonical `tool_dependencies` are excluded from embedding
 documents. Each exact UTF-8 input has a canonical `sha256:` content hash.
 
-Every query or document input must be non-empty and at most 8,000 UTF-8 bytes.
+Every query or document input must be non-empty and at most 8,191 cl100k_base tokens, using the pinned offline vocabulary.
 Over-limit input fails before provider dispatch; it is never truncated, summarized,
 split, or replaced by a hash-only embedding input.
 
@@ -497,7 +497,7 @@ Using literal records, temporary directories, and fake embedding transports, tes
 15. provider/cache/index errors propagate without BM25, stale, empty-result,
     alternate-model, or zero-vector fallback;
 16. imports perform no I/O, environment read, client construction, or SQLite open.
-17. exact acceptance/rejection at the 8,000-byte per-input and 280,000-byte
+17. exact acceptance/rejection at the 8,191-token per-input and 280,000-byte
     per-batch boundaries, with no truncation or provider call after rejection.
 
 ## Deferred Real-Data Validation

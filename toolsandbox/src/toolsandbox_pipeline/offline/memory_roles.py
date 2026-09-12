@@ -72,7 +72,7 @@ class PreparedMemoryRequest(StrictModel):
     token_limit_config_status: Literal["provisional", "calibrated"]
     token_limit_config_sha256: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
     unit_reference: Annotated[str, Field(min_length=1, pattern=r"^\S+$")]
-    prompt_version: Literal["v1"]
+    prompt_version: Literal["v1", "v2"]
     prompt_sha256: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
     user_envelope_sha256: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
     canonical_input_fingerprint: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
@@ -122,6 +122,7 @@ def _prepared(
     limits: OfflineMemoryTokenLimits,
     limits_sha256: str,
     structured_output_wire_mode: str,
+    prompt_version: Literal["v1", "v2"] = "v1",
 ) -> PreparedMemoryRequest:
     maximum = limits.memory_candidate if role == "memory_candidate" else limits.memory_review
     schema_sha = canonical_sha256(output_model.model_json_schema())
@@ -147,7 +148,7 @@ def _prepared(
         token_limit_config_status=limits.status,
         token_limit_config_sha256=limits_sha256,
         unit_reference=unit_reference,
-        prompt_version="v1",
+        prompt_version=prompt_version,
         prompt_sha256=prompt_sha256,
         user_envelope_sha256=canonical_sha256(json.loads(envelope)),
         canonical_input_fingerprint=fingerprint,
@@ -162,6 +163,7 @@ def prepare_candidate_request(
     limits: OfflineMemoryTokenLimits,
     limits_sha256: str,
     structured_output_wire_mode: str,
+    input_representation: Literal["v1", "packed-v2"] = "v1",
 ) -> PreparedMemoryRequest:
     if type(projection) is PolicyTrajectoryProjection:
         memory_role = "policy"
@@ -171,12 +173,25 @@ def prepare_candidate_request(
         output_model = WorldMemoryCandidateDecision
     else:
         raise TypeError("strict trajectory projection required")
+    prompt = prompts.candidate
+    prompt_sha = prompts.candidate_sha256
+    envelope = candidate_envelope(projection)
+    version = "v1"
+    if input_representation == "packed-v2":
+        from .reflection_packing import NOTICE, candidate_input
+        envelope = candidate_input(projection)
+        prompt = NOTICE + prompt
+        prompt_sha = "sha256:" + sha256(prompt.encode("utf-8")).hexdigest()
+        version = "v2"
+    elif input_representation != "v1":
+        raise ValueError("unknown reflection input representation")
     return _prepared(
+        prompt_version=version,
         role="memory_candidate",
         memory_role=memory_role,
-        prompt=prompts.candidate,
-        prompt_sha256=prompts.candidate_sha256,
-        envelope=candidate_envelope(projection),
+        prompt=prompt,
+        prompt_sha256=prompt_sha,
+        envelope=envelope,
         output_model=output_model,
         unit_reference=unit_reference,
         limits=limits,

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from enum import Enum
+from copy import deepcopy
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from .base import StrictModel
 
@@ -41,12 +42,35 @@ class CriticErrorCode(str, Enum):
     LIKELY_MINEFIELD_BEHAVIOR = "LIKELY_MINEFIELD_BEHAVIOR"
 
 
+CRITIC_MAX_WORDS = 128
+
+
 class CriticOutput(StrictModel):
     verdict: CriticVerdict
     predicted_outcome: PredictedOutcome
-    predicted_effect: str
-    error_codes: list[CriticErrorCode]
-    correction: str
+    predicted_effect: str = Field(description=f"Concise immediate effect; at most {CRITIC_MAX_WORDS} whitespace-delimited words.")
+    error_codes: list[CriticErrorCode] = Field(max_length=len(CriticErrorCode))
+    correction: str = Field(description=f"Concise constraint-level correction; at most {CRITIC_MAX_WORDS} whitespace-delimited words; empty for accept.")
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        schema = handler.resolve_ref_schema(handler(core_schema))
+        branches = []
+        for verdict in ("accept", "revise", "uncertain"):
+            branch = deepcopy(schema)
+            properties = branch["properties"]
+            properties["verdict"] = {"type": "string", "const": verdict}
+            properties["predicted_effect"]["minLength"] = 1
+            if verdict == "accept":
+                properties["error_codes"]["maxItems"] = 0
+                properties["correction"]["maxLength"] = 0
+            else:
+                properties["error_codes"]["minItems"] = 1
+                properties["correction"]["minLength"] = 1
+                if verdict == "uncertain":
+                    properties["predicted_outcome"] = {"type": "string", "const": "uncertain"}
+            branches.append(branch)
+        return {"title": schema.get("title", "CriticOutput"), "anyOf": branches}
 
     @field_validator("verdict", mode="before")
     @classmethod
@@ -72,8 +96,8 @@ class CriticOutput(StrictModel):
     @field_validator("predicted_effect", "correction")
     @classmethod
     def validate_word_limit(cls, value: str) -> str:
-        if len(value.split()) > 40:
-            raise ValueError("text must contain at most 40 whitespace-delimited words")
+        if len(value.split()) > CRITIC_MAX_WORDS:
+            raise ValueError(f"text must contain at most {CRITIC_MAX_WORDS} whitespace-delimited words")
         return value
 
     @model_validator(mode="after")

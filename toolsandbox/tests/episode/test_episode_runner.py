@@ -232,3 +232,23 @@ def test_real_episode_flow_binds_executed_calls_to_originating_turn(
     assert trajectory.online_turns[1].executed_call_ids == ()
     assert trajectory.skill_attributions[0].executed_call_ids == ("call-1",)
     assert trajectory.skill_attributions[0].fully_successful is True
+
+
+def test_user_end_conversation_is_not_attributed_to_agent(trajectory_store, start_context):
+    import pytest
+    from toolsandbox_pipeline.schemas.trajectory import ToolActionRecord
+    from toolsandbox_pipeline.toolsandbox_adapter.episode_runner import bind_executed_calls_to_turns
+    stored = trajectory_store.persist_context(start_context)
+    control = ToolActionRecord(
+        transaction_id="user-control", action_sha256="sha256:" + "a" * 64,
+        call_ids=("user-end",), selected_skill_ids=(None,), canonical_tool_ids=("end_conversation",),
+        effect_classes=("conversation_control",),
+        pre_context_reference=stored.reference, pre_context_sha256=stored.context_sha256,
+        post_context_reference=stored.reference, post_context_sha256=stored.context_sha256,
+        result_message_indices=(), external_attempt_ids=(), executed=True, committed=True,
+        rolled_back=False, failed=False,
+    )
+    assert bind_executed_calls_to_turns((), (control,)) == ()
+    unrelated = control.model_copy(update={"effect_classes": ("sandbox_read",), "canonical_tool_ids": ("search_messages",)})
+    with pytest.raises(RuntimeError, match="originating Agent turn"):
+        bind_executed_calls_to_turns((), (unrelated,))

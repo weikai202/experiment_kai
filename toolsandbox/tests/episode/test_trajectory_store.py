@@ -66,3 +66,33 @@ def test_trusted_trajectory_build_normalizes_tuple_id_columns(
         eligible_for_train_offline_consumption=True,
     )
     assert trajectory.trajectory_id.startswith("sha256:")
+
+
+def test_user_termination_is_retained_without_agent_attribution(
+    trajectory_store, start_context, episode_identity
+):
+    import pytest
+    from toolsandbox_pipeline.schemas.trajectory import ToolActionRecord
+    ending = trajectory_store.persist_context(start_context)
+    control = ToolActionRecord(
+        transaction_id="user-end", action_sha256="sha256:" + "a" * 64,
+        call_ids=("end-1",), selected_skill_ids=(None,), canonical_tool_ids=("end_conversation",),
+        effect_classes=("conversation_control",), pre_context_reference=ending.reference,
+        pre_context_sha256=ending.context_sha256, post_context_reference=ending.reference,
+        post_context_sha256=ending.context_sha256, executed=True, committed=True,
+        rolled_back=False, failed=False,
+    )
+    args = dict(identity=episode_identity, messages=(), online_turns=(), logical_request_ids=(),
+                physical_attempt_ids=(), ending_context_reference=ending.reference,
+                ending_context_sha256=ending.context_sha256, evaluator_record_reference=ending.reference,
+                evaluator_record_sha256=ending.reference.sha256, skill_attributions=(),
+                eligible_for_train_offline_consumption=False)
+    trajectory = TrustedTrajectory.build(tool_actions=(control,), **args)
+    assert trajectory.tool_actions == (control,)
+    assert not trajectory.online_turns
+    for change in ({"effect_classes": ("sandbox_read",)}, {"canonical_tool_ids": ("search_messages",)},
+                   {"selected_skill_ids": ("skill-1",)}):
+        with pytest.raises(ValueError, match="originating turns"):
+            TrustedTrajectory.build(tool_actions=(control.model_copy(update=change),), **args)
+    with pytest.raises(ValueError, match="identity reused"):
+        TrustedTrajectory.build(tool_actions=(control, control.model_copy(update={"transaction_id": "other"})), **args)

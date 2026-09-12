@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "runtime_root": "/root/toolsandbox-runtime",
+  "qwen_config": "/root/toolsandbox-runtime/qwen-config.json",
+  "embedding_config": "/root/toolsandbox-runtime/embedding-config.json",
+  "train_manifest": "/root/toolsandbox-runtime/dataset/train_manifest.json",
+  "online_limits": "/root/toolsandbox/configs/online_token_limits.smoke.json",
+  "tool_metadata": "/root/toolsandbox/configs/tool_metadata/controller_tool_metadata.search_review_smoke.jsonl",
+  "tool_metadata_manifest": "/root/toolsandbox/configs/tool_metadata/manifest.search_review_smoke.json",
+  "backend_manifest": "/root/toolsandbox/configs/reproducibility/rapidapi_backends_frankfurter_v2.json",
+  "backend_manifest_sha256": "sha256:b64a3f53388444fde4e17834fad12b1cbbac58d3afb43cecf289f011688193a4",
+  "external_preflight": "/root/toolsandbox-runtime/external-preflight-result.json",
+  "hard_ceiling": 2048,
+  "qwen_base_url": "http://127.0.0.1:18080/v1"
+}

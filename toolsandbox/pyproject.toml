@@ -12,6 +12,7 @@ dependencies = [
   "httpx==0.27.2",
   "openai==1.17.0",
   "pydantic==2.7.4",
+  "tiktoken==0.7.0",
   "tool-sandbox @ git+https://github.com/apple/ToolSandbox.git@165848b9a78cead7ca7fe7c89c688b58e6501219",
 ]
 

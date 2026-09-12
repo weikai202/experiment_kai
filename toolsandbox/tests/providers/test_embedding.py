@@ -24,7 +24,7 @@ def test_valid_embeddings(inputs):
 
 
 @pytest.mark.parametrize("inputs", ["", [], [""], [1], 1, None, ("one",), ["x"] * 2049,
-                                     "x" * 8001, "\u6c49" * 2667, ["x" * 8000] * 36])
+                                     "\x00" * 8192, "\u6c49" * 8192, ["x" * 8000] * 36])
 def test_invalid_inputs_before_dispatch(inputs):
     transport = FakeTransport()
     with pytest.raises(ProviderRequestError) as caught:
@@ -101,3 +101,20 @@ def test_byte_limits_allow_exact_boundary():
     gateway = EmbeddingGateway(EmbeddingConfig(), transport=transport)
     gateway.embed(context(ProviderRole.EMBEDDING), ["x" * 8000] * 35)
     assert len(transport.calls) == 1
+
+
+def test_long_bytes_with_valid_token_count_are_preserved():
+    from toolsandbox_pipeline.providers.embedding_limits import validate_embedding_input, embedding_encoding
+    text = 'A complete message retrieval state. ' * 400
+    assert len(text.encode()) > 8000
+    assert len(embedding_encoding().encode_ordinary(text)) < 8191
+    assert validate_embedding_input(text) == text
+
+
+def test_token_boundary_and_literal_special_tokens():
+    from toolsandbox_pipeline.providers.embedding_limits import validate_embedding_input
+    assert validate_embedding_input('\x00' * 8191) == '\x00' * 8191
+    with pytest.raises(ValueError, match='8191 tokens'):
+        validate_embedding_input('\x00' * 8192)
+    text='<|endoftext|> is user data. ' * 400
+    assert validate_embedding_input(text)==text

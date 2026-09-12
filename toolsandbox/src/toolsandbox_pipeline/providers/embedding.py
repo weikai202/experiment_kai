@@ -1,6 +1,7 @@
 """Strict, uncached embeddings. Callers persist the first observed dimension."""
 import math
 from toolsandbox_pipeline.schemas.runtime import EmbeddingConfig
+from .embedding_limits import validate_embedding_input, MAX_BATCH_BYTES
 from toolsandbox_pipeline.providers.contracts import ProviderRole, physical_request
 
 
@@ -28,7 +29,9 @@ class EmbeddingGateway:
             if any(type(item) is not str or not item for item in batch):
                 raise ValueError("non-empty strings required")
             sizes = [len(item.encode("utf-8")) for item in batch]
-            if any(size > 8000 for size in sizes) or sum(sizes) > 280000:
+            for item in batch:
+                validate_embedding_input(item)
+            if sum(sizes) > MAX_BATCH_BYTES:
                 raise ValueError("embedding byte limit exceeded")
             request = dict(model=self.config.model, input=inputs if type(inputs) is str else list(inputs), encoding_format="float")
             if self._transport is None:

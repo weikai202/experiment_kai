@@ -185,7 +185,15 @@ class MemoryUpdateOrchestrator:
         source_generation_sha256: str,
         current_policy_memory: tuple[PolicyMemory, ...],
         current_world_memory: tuple[WorldMemory, ...],
+        input_representation: Literal["v1", "packed-v2"] = "v1",
+        world_input_representation: Literal["v1"] | None = None,
     ) -> None:
+        if input_representation not in ("v1", "packed-v2"):
+            raise ValueError("unknown reflection input representation")
+        if world_input_representation not in (None, "v1"):
+            raise ValueError("World reflection supports v1 only")
+        self.world_input_representation = world_input_representation
+        self.input_representation = input_representation
         self.prompts = prompts
         self.limits = limits
         self.limits_sha256 = limits_sha256
@@ -205,6 +213,10 @@ class MemoryUpdateOrchestrator:
     def run(self, buffer: SealedMemoryTrajectoryBuffer) -> MemoryRoundResult:
         if type(buffer) is not SealedMemoryTrajectoryBuffer:
             raise TypeError("sealed Task 015 trajectory buffer required")
+        if self.input_representation == "packed-v2" and self.world_input_representation is None and any(
+            entry.world_projection is not None for entry in buffer.entries
+        ):
+            raise MemoryOrchestrationError("packed-v2 supports Policy-only buffers")
         policy_entries = selected_policy_entries(buffer.entries)
         world_entries = selected_world_entries(buffer.entries)
         policy_ids = {entry.trajectory_id for entry in policy_entries}
@@ -279,6 +291,7 @@ class MemoryUpdateOrchestrator:
             raise MemoryOrchestrationError("missing trusted role projection")
         candidate_request = prepare_candidate_request(
             projection,
+            input_representation=(self.world_input_representation or self.input_representation) if role == "world" else self.input_representation,
             unit_reference=unit_reference,
             prompts=self.prompts,
             limits=self.limits,

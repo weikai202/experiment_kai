@@ -2,7 +2,7 @@
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_serializer, model_validator
 from toolsandbox_pipeline.schemas.base import StrictModel
 
 NonEmpty = Annotated[str, Field(min_length=1)]
@@ -37,6 +37,8 @@ class QwenConfig(RuntimeConfig):
     seed: Literal[0] = 0
     enable_thinking: Literal[False] = False
     structured_output_wire_mode: Literal["guided_json", "structured_outputs_json"]
+    critic_structured_output_mode: Literal["json_schema", "ordered_unique_grammar_v1"] = "json_schema"
+    critic_grammar_sha256: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")] | None = None
     base_url_env: Literal["QWEN_BASE_URL"] = "QWEN_BASE_URL"
     api_key_env: Literal["QWEN_API_KEY"] = "QWEN_API_KEY"
     allow_empty_local_key: bool = False
@@ -61,9 +63,32 @@ class QwenConfig(RuntimeConfig):
     def limits(self):
         if self.context_limit and self.output_limit and self.output_limit > self.context_limit:
             raise ValueError("output limit exceeds context limit")
+        self.validate_critic_structured_output()
         return self
 
+    def validate_critic_structured_output(self) -> None:
+        if self.critic_structured_output_mode == "json_schema":
+            if self.critic_grammar_sha256 is not None:
+                raise ValueError("JSON-schema Critic mode cannot bind a grammar hash")
+            return
+        if (self.critic_structured_output_mode != "ordered_unique_grammar_v1"
+                or self.structured_output_wire_mode != "structured_outputs_json"
+                or self.structured_output_backend != "xgrammar"):
+            raise ValueError("Critic grammar requires explicit xgrammar structured outputs")
+        from toolsandbox_pipeline.providers.critic_grammar import critic_grammar_sha256
+        if self.critic_grammar_sha256 != critic_grammar_sha256():
+            raise ValueError("Critic grammar hash mismatch")
+
+    @model_serializer(mode="wrap")
+    def historical_json_schema_identity(self, handler):
+        payload = handler(self)
+        if self.critic_structured_output_mode == "json_schema" and self.critic_grammar_sha256 is None:
+            payload.pop("critic_structured_output_mode", None)
+            payload.pop("critic_grammar_sha256", None)
+        return payload
+
     def validate_external(self) -> None:
+        self.validate_critic_structured_output()
         if any(getattr(self, name) is None for name in (
             "expected_vllm_version", "container_digest", "served_model_id",
             "structured_output_backend", "generation_config_policy",

@@ -1,0 +1,11 @@
+{
+  "schema_version": 2,
+  "online_settings": "/root/toolsandbox/configs/run/live_calibration_v1.json",
+  "online_run_directory": null,
+  "output_root": "/root/toolsandbox-runtime/full-runs",
+  "dataset_index": "/root/toolsandbox-runtime/dataset/dataset_index.json",
+  "image_provenance": "/root/toolsandbox-runtime/image-provenance.json",
+  "dev_manifest": "/root/toolsandbox-runtime/dataset/dev_manifest.json",
+  "offline_memory_limits": "/root/toolsandbox/configs/offline_memory_token_limits.provisional.json",
+  "dataset_index_sha256": "sha256:b4cd7e2c27fad97e9933118de8dfd1ed662ed6d21bf459b9e9d5fe7f6e132dd2"
+}

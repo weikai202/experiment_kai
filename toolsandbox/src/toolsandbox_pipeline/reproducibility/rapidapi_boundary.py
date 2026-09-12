@@ -23,6 +23,7 @@ import tool_sandbox.tools.rapid_api_search_tools as upstream_rapidapi
 from toolsandbox_pipeline.reproducibility.canonical import canonical_sha256
 from toolsandbox_pipeline.reproducibility.fixture_store import (
     EXPECTED_BACKENDS,
+    APPROVED_BACKEND_CONFIGS,
     FixtureStore,
     FixtureValidationError,
     PINNED_BACKEND_CONFIG_SHA256,
@@ -210,14 +211,14 @@ class RapidAPIBoundary(AbstractContextManager["RapidAPIBoundary"]):
             for item in backend_manifest.backends
         )
         if (
-            backend_manifest_sha256 != PINNED_BACKEND_CONFIG_SHA256
-            or actual_backends != EXPECTED_BACKENDS
+            backend_manifest_sha256 not in APPROVED_BACKEND_CONFIGS
+            or actual_backends != APPROVED_BACKEND_CONFIGS.get(backend_manifest_sha256)
             or backend_manifest.request_timeout_seconds != 30.0
         ):
             raise RapidAPIBoundaryError("RAPIDAPI_BACKEND_MANIFEST_DRIFT")
         if mode == "replay" and (fixture_store is None or fixture_miss_sink is None):
             raise RapidAPIBoundaryError("REPLAY_DEPENDENCY_MISSING")
-        if mode == "official_live" and (transport is None or credential_provider is None):
+        if mode == "official_live" and transport is None:
             raise RapidAPIBoundaryError("LIVE_DEPENDENCY_MISSING")
         self.mode = mode
         self.profile = profile
@@ -354,15 +355,26 @@ class RapidAPIBoundary(AbstractContextManager["RapidAPIBoundary"]):
         started_at: str,
         attempt_id: str,
     ) -> dict[str, Any]:
-        assert self.transport is not None and self.credential_provider is not None
+        assert self.transport is not None
         record = next(
             item for item in self.backend_manifest.backends
             if item.canonical_tool_name == request.canonical_tool_name
         )
         try:
-            credential = self.credential_provider()
-            if type(credential) is not str or not credential:
-                raise PermissionError("credential unavailable")
+            from toolsandbox_pipeline.toolsandbox_adapter.currency_backend import BACKEND_VERSION, request_parameters
+            currency = request.canonical_tool_name == "convert_currency"
+            if currency:
+                if request.backend_version != BACKEND_VERSION:
+                    raise ValueError("LegacyCurrencyBackendRetired")
+                dispatch = request_parameters(request.effective_arguments)
+            else:
+                if self.credential_provider is None:
+                    raise PermissionError("credential unavailable")
+                credential = self.credential_provider()
+                if type(credential) is not str or not credential:
+                    raise PermissionError("credential unavailable")
+                dispatch = dict(url=record.url, params=dict(request.effective_arguments),
+                    headers={"X-RapidAPI-Host":record.host, "X-RapidAPI-Key":credential})
         except Exception as exc:
             self._record(
                 attempt_id, context, request, started, started_at,
@@ -372,9 +384,7 @@ class RapidAPIBoundary(AbstractContextManager["RapidAPIBoundary"]):
             raise RapidAPIBoundaryError("EXTERNAL_READ_REJECTED") from exc
         try:
             response = self.transport.get(
-                record.url,
-                params=dict(request.effective_arguments),
-                headers={"X-RapidAPI-Host": record.host, "X-RapidAPI-Key": credential},
+                **dispatch,
                 timeout=self.backend_manifest.request_timeout_seconds,
                 allow_redirects=self.backend_manifest.allow_redirects,
             )
@@ -407,6 +417,17 @@ class RapidAPIBoundary(AbstractContextManager["RapidAPIBoundary"]):
                 response_byte_count=byte_count,
             )
             raise ExternalReadFailed()
+        if currency:
+            try:
+                from toolsandbox_pipeline.toolsandbox_adapter.currency_backend import adapt_response
+                body = adapt_response(body, request.effective_arguments)
+                body_hash = canonical_sha256(body)
+            except Exception as exc:
+                self._record(attempt_id, context, request, started, started_at,
+                    status="failed", dispatched=True, status_code=status_code,
+                    response_body_sha256=body_hash, sanitized_exception_class=type(exc).__name__,
+                    response_byte_count=byte_count)
+                raise ExternalReadFailed() from None
         self._record(
             attempt_id, context, request, started, started_at,
             status="completed", dispatched=True, status_code=200,

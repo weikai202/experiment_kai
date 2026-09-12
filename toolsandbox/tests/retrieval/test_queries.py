@@ -42,10 +42,9 @@ def test_documents():
 
 def test_byte_limits():
     assert len(validate_input("\u00e9" * 4000).encode()) == 8000
+    assert validate_input("\u00e9" * 4000 + "a").endswith("a")
     with pytest.raises(ValueError):
-        validate_input("\u00e9" * 4000 + "a")
-    with pytest.raises(ValueError):
-        policy_query(state("x" * 8000))
+        policy_query(state("x" * 280001))
 
 
 def test_nested_projection_rejects_sidecars_and_preserves_batch_order():

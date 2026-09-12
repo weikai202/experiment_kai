@@ -136,7 +136,7 @@ class FixtureEntry(FrozenRecord):
     normalized_response_body: JsonObject
     response_body_sha256: Digest
     captured_at_utc: UtcTimestamp
-    source: Literal["rapidapi_capture"]
+    source: Literal["rapidapi_capture", "frankfurter_capture"]
 
     @model_validator(mode="after")
     def identities_match(self) -> "FixtureEntry":
@@ -149,6 +149,9 @@ class FixtureEntry(FrozenRecord):
             request_url_identity=self.request_url_identity,
         )
         del request
+        frankfurter = self.backend_version == "frankfurter-v2-rate-v1"
+        if frankfurter != (self.source == "frankfurter_capture") or (frankfurter and self.canonical_tool_name != "convert_currency"):
+            raise ValueError("fixture source/backend mismatch")
         if canonical_sha256(self.normalized_response_body) != self.response_body_sha256:
             raise ValueError("fixture response body hash mismatch")
         return self

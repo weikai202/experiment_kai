@@ -165,8 +165,13 @@ def capture_fixtures(
     for request in request_manifest.requests:
         validate_request_against_backend(request, backend_manifest)
     # All input/output authorization validation precedes credential retrieval.
-    credential = credential_provider()
-    if type(credential) is not str or not credential:
+    from toolsandbox_pipeline.toolsandbox_adapter.currency_backend import BACKEND_VERSION, request_parameters, adapt_response
+    for request in request_manifest.requests:
+        if request.canonical_tool_name == "convert_currency" and request.backend_version != BACKEND_VERSION:
+            raise FixtureValidationError("legacy currency capture is retired; select Frankfurter manifest")
+    needs_key = any(request.canonical_tool_name != "convert_currency" for request in request_manifest.requests)
+    credential = credential_provider() if needs_key else None
+    if needs_key and (type(credential) is not str or not credential):
         raise FixtureValidationError("capture credential unavailable")
     root.mkdir(mode=0o700)
     attempts: list[ExternalReadAttempt] = []
@@ -184,11 +189,13 @@ def capture_fixtures(
         started = monotonic()
         previous_dispatch = started
         context = _capture_context(request, backend_manifest_sha256)
+        currency = request.canonical_tool_name == "convert_currency"
+        dispatch = request_parameters(request.effective_arguments) if currency else dict(
+            url=record.url, params=dict(request.effective_arguments),
+            headers={"X-RapidAPI-Host":record.host,"X-RapidAPI-Key":credential})
         try:
             response = transport.get(
-                record.url,
-                params=dict(request.effective_arguments),
-                headers={"X-RapidAPI-Host": record.host, "X-RapidAPI-Key": credential},
+                **dispatch,
                 timeout=backend_manifest.request_timeout_seconds,
                 allow_redirects=backend_manifest.allow_redirects,
             )
@@ -212,6 +219,9 @@ def capture_fixtures(
             break
         try:
             status_code, body, body_sha256, byte_count = normalize_response(response)
+            if status_code == 200 and currency:
+                body = adapt_response(body, request.effective_arguments)
+                body_sha256 = canonical_sha256(body)
         except Exception as exc:
             failure_class = type(exc).__name__
             attempts.append(
@@ -282,7 +292,7 @@ def capture_fixtures(
                 normalized_response_body=body,
                 response_body_sha256=body_sha256,
                 captured_at_utc=utc_now(),
-                source="rapidapi_capture",
+                source="frankfurter_capture" if currency else "rapidapi_capture",
             )
         )
     elapsed = float(max(0.0, monotonic() - start_all))

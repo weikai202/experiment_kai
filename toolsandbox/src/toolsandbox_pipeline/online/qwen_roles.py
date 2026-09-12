@@ -167,6 +167,9 @@ class _Runner:
         # Re-run the exact strict local contract over the stored validated value.
         try:
             output_model.model_validate_json(response.value.model_dump_json())
+            if output_model is ActionEnvelope:
+                from toolsandbox_pipeline.toolsandbox_adapter.action_decode import audit_provider_action
+                audit_provider_action(response, allow_legacy=True)
         except Exception:
             raise QwenResponseDurabilityError(
                 "invalid completed Qwen response"

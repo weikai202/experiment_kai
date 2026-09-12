@@ -10,3 +10,13 @@ runs/**
 dist/
 build/
 *.egg-info/
+
+# Local runtime state and credentials
+credentials.json
+.credential-*
+*.sqlite3
+*.sqlite3-*
+models/
+vllm-env/
+full-runs/
+progress/

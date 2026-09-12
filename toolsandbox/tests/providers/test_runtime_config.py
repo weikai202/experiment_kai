@@ -123,3 +123,54 @@ def test_versioned_token_limit_selection():
                                  evidence_manifest_identity="sha256:" + "a" * 64)
     with pytest.raises(ValidationError):
         config.max_tokens = 1024
+
+
+def test_default_critic_mode_preserves_historical_configuration_identity():
+    import json
+    config = resolved_qwen()
+    expected = dict(timeout_seconds=60.0, provider='vllm_openai_compatible', model='Qwen/Qwen3-32B',
+                    temperature=0.0, seed=0, enable_thinking=False, structured_output_wire_mode='guided_json',
+                    base_url_env='QWEN_BASE_URL', api_key_env='QWEN_API_KEY', allow_empty_local_key=False,
+                    expected_vllm_version='0.17.0', container_digest='sha256:' + 'c' * 64,
+                    served_model_id='Qwen/Qwen3-32B', structured_output_backend='xgrammar',
+                    generation_config_policy='vllm', server_launch_configuration='reviewed-launch-v1',
+                    context_limit=32768, output_limit=2048)
+    assert config.model_dump() == expected
+    assert config.model_dump(mode='json') == expected
+    assert json.loads(config.model_dump_json()) == expected
+    assert QwenConfig.model_validate(expected).model_dump() == expected
+
+
+def grammar_config(**changes):
+    from toolsandbox_pipeline.providers.critic_grammar import critic_grammar_sha256
+    values = dict(structured_output_wire_mode='structured_outputs_json',
+                  critic_structured_output_mode='ordered_unique_grammar_v1',
+                  critic_grammar_sha256=critic_grammar_sha256())
+    values.update(changes)
+    return resolved_qwen(**values)
+
+
+def test_explicit_critic_grammar_configuration_roundtrip_and_identity():
+    from toolsandbox_pipeline.reproducibility import canonical_sha256
+    config = grammar_config()
+    payload = config.model_dump(mode='json')
+    assert payload['critic_structured_output_mode'] == 'ordered_unique_grammar_v1'
+    assert payload['critic_grammar_sha256'].startswith('sha256:')
+    assert QwenConfig.model_validate_json(config.model_dump_json()) == config
+    config.validate_external()
+    assert canonical_sha256(payload) != canonical_sha256(resolved_qwen(structured_output_wire_mode='structured_outputs_json').model_dump(mode='json'))
+
+
+@pytest.mark.parametrize('changes', [
+    {'critic_structured_output_mode': 'auto'},
+    {'critic_structured_output_mode': 'json_schema'},
+    {'critic_grammar_sha256': None},
+    {'critic_grammar_sha256': 'sha256:' + '0' * 64},
+    {'critic_grammar_sha256': 'invalid'},
+    {'structured_output_wire_mode': 'guided_json'},
+    {'structured_output_backend': 'outlines'},
+    {'structured_output_backend': None},
+])
+def test_invalid_critic_grammar_configuration_fails_closed(changes):
+    with pytest.raises(ValidationError):
+        grammar_config(**changes)

@@ -67,3 +67,40 @@ def test_staged_same_round_record_is_visible():
         candidate={"scope": "scope", "applicability": [], "action_guidance": "guidance", "avoid": []},
     )
     assert retriever.retrieve(candidate).records == (staged,)
+
+
+def test_staged_merge_accepts_one_evidence_but_rejects_semantic_vector_or_statistic_drift():
+    import pytest
+    from toolsandbox_pipeline.retrieval.contracts import RetrievalError
+    from toolsandbox_pipeline.offline.memory_updates import apply_memory_review
+    from toolsandbox_pipeline.schemas.offline_memory import MemoryReviewMerge
+    base = record('a')
+    candidate = PolicyMemoryCandidate(result='CANDIDATE', role='policy', candidate={
+        'scope': base.scope, 'applicability': [], 'action_guidance': base.action_guidance, 'avoid': []})
+    merged = apply_memory_review(candidate, MemoryReviewMerge(decision='MERGE', target_memory_id=base.memory_id, reason='Equivalent'),
+        trajectory_id=digest('b'), next_generation_id='g001', binary_label=False,
+        all_visible_records=(base,), supplied_matches=(base,)).record
+    retriever = MemoryCandidateRetriever(generation_id='g000', policy_records=(), world_records=(), indexes=(), embedding_resolver=Resolver())
+    retriever.remember_staged(base, semantic_vector=(1.0, 0.0))
+    for altered, vector in (
+        (merged.model_copy(update={'action_guidance': 'Different semantics'}), (1.0, 0.0)),
+        (merged, (0.0, 1.0)),
+        (merged.model_copy(update={'success_rate': 0.0}), (1.0, 0.0)),
+        (merged.model_copy(update={'evidence_trajectory_ids': ('trajectory-b', 'trajectory-c')}), (1.0, 0.0)),
+    ):
+        with pytest.raises(RetrievalError, match='conflicting staged'):
+            retriever.remember_staged(altered, semantic_vector=vector)
+    index = RetrievalIndexEntry(generation_id='g000', record_kind='policy', record_id=base.memory_id,
+        document_sha256=digest('f'), embedding_cache_key=EmbeddingCacheKey(input_sha256=digest('f')),
+        vector_dimension=2, vector=(1.0, 0.0))
+    current = MemoryCandidateRetriever(generation_id='g000', policy_records=(base,), world_records=(),
+        indexes=(index,), embedding_resolver=Resolver())
+    with pytest.raises(RetrievalError, match='conflicting staged'):
+        current.remember_staged(merged.model_copy(update={'action_guidance': 'Different semantics'}), semantic_vector=(1.0, 0.0))
+    current.remember_staged(merged, semantic_vector=(1.0, 0.0))
+    assert current.retrieve(candidate).records == (merged,)
+    retriever.remember_staged(merged, semantic_vector=(1.0, 0.0))
+    retriever.remember_staged(merged, semantic_vector=(1.0, 0.0))
+    assert retriever.retrieve(candidate).records == (merged,)
+    with pytest.raises(RetrievalError, match='conflicting staged'):
+        retriever.remember_staged(base, semantic_vector=(1.0, 0.0))

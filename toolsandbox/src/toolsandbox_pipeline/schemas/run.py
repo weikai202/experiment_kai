@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator, model_serializer
 
 from toolsandbox_pipeline.reproducibility import canonical_sha256
 from toolsandbox_pipeline.schemas.base import StrictModel
@@ -29,7 +29,26 @@ class FrozenRunRecord(StrictModel):
 class QwenRunIdentity(FrozenRunRecord):
     model: Literal["Qwen/Qwen3-32B"] = "Qwen/Qwen3-32B"
     endpoint_identity_sha256: Digest
-    container_digest: Digest
+    container_digest: Digest | None
+    registry_declared_digest: Digest | None = None
+    image_verification: Literal["verified", "unverified"] = "verified"
+
+    @model_validator(mode="after")
+    def honest_image(self):
+        if self.image_verification == "unverified":
+            if self.container_digest is not None or self.registry_declared_digest is None:
+                raise ValueError("unverified image requires declared digest and no actual digest")
+        elif self.container_digest is None:
+            raise ValueError("verified image requires actual digest")
+        return self
+
+    @model_serializer(mode="wrap")
+    def omit_legacy_image_defaults(self, handler):
+        value = handler(self)
+        if self.image_verification == "verified" and self.registry_declared_digest is None:
+            value.pop("registry_declared_digest", None)
+            value.pop("image_verification", None)
+        return value
     server_configuration_sha256: Digest
     decoding_configuration_sha256: Digest
     structured_output_wire_mode: Literal["guided_json", "structured_outputs_json"]
@@ -118,7 +137,7 @@ class ResolvedRunManifest(FrozenRunRecord):
     """One non-secret immutable root identity for a smoke or formal train run."""
 
     schema_version: Literal[1] = 1
-    protocol_version: Literal["toolsandbox-evolution-v1"] = "toolsandbox-evolution-v1"
+    protocol_version: Literal["toolsandbox-evolution-v1", "toolsandbox-evolution-live-v2"] = "toolsandbox-evolution-v1"
     run_id: Annotated[str, Field(min_length=1, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")]
     purpose: Literal["train_smoke", "formal_training"]
     profile: Literal["strict_replay", "official_live"]
@@ -131,7 +150,9 @@ class ResolvedRunManifest(FrozenRunRecord):
     upstream_commit: Literal[UPSTREAM_COMMIT] = UPSTREAM_COMMIT
     upstream_source_sha256: Digest
     dependency_lock_sha256: Digest
-    container_image_digest: Digest
+    container_image_digest: Digest | None
+    registry_declared_digest: Digest | None = None
+    image_verification: Literal["verified", "unverified"] = "verified"
     environment_sha256: Digest
     python_patch_version: Annotated[str, Field(pattern=r"^3\.10\.[0-9]+$")]
     timezone: Literal["UTC"] = "UTC"
@@ -169,6 +190,18 @@ class ResolvedRunManifest(FrozenRunRecord):
 
     @model_validator(mode="after")
     def protocol_invariants(self):
+        if self.protocol_version == "toolsandbox-evolution-v1":
+            if (self.container_image_digest is None or self.image_verification != "verified"
+                    or self.registry_declared_digest is not None or self.qwen.image_verification != "verified"
+                    or self.qwen.registry_declared_digest is not None):
+                raise ValueError("v1 requires verified actual image identities")
+        elif self.purpose != "formal_training" or self.profile != "official_live":
+            raise ValueError("live v2 is restricted to official-live formal training")
+        if self.image_verification == "unverified":
+            if self.container_image_digest is not None or self.registry_declared_digest is None:
+                raise ValueError("unverified image requires declared digest and no actual digest")
+        elif self.container_image_digest is None:
+            raise ValueError("verified image requires actual digest")
         if self.ordered_train_shard_ids != (
             "train-shard-0", "train-shard-1", "train-shard-2",
         ):
@@ -191,6 +224,14 @@ class ResolvedRunManifest(FrozenRunRecord):
             if value.startswith(("sk-", "Bearer ")):
                 raise ValueError("secret-like manifest value forbidden")
         return self
+
+    @model_serializer(mode="wrap")
+    def omit_legacy_image_defaults(self, handler):
+        value = handler(self)
+        if self.protocol_version == "toolsandbox-evolution-v1":
+            value.pop("registry_declared_digest", None)
+            value.pop("image_verification", None)
+        return value
 
     @property
     def manifest_sha256(self) -> str:

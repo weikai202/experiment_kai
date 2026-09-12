@@ -124,7 +124,7 @@ class Durability:
         return {"offline_unit_transactions": len(self.units)}
 
 
-def subject(executor, durability):
+def subject(executor, durability, **options):
     prompts = load_memory_prompts(ROOT.resolve(), (ROOT / "prompts/offline/memory_manifest.json").resolve())
     limits, limit_sha = load_token_limits((ROOT / "configs/offline_memory_token_limits.provisional.json").resolve())
     retriever = MemoryCandidateRetriever(
@@ -134,7 +134,7 @@ def subject(executor, durability):
         prompts=prompts, limits=limits, limits_sha256=limit_sha,
         structured_output_wire_mode="guided_json", role_executor=executor,
         retriever=retriever, durability=durability, source_generation_sha256=digest("4"),
-        current_policy_memory=(), current_world_memory=(),
+        current_policy_memory=(), current_world_memory=(), **options,
     )
 
 
@@ -169,3 +169,38 @@ def test_add_commits_candidate_and_reviewer_chain_as_one_substantive_effect():
     assert result.policy_counts["ADD"] == 1 and len(result.staged_policy_memory) == 1
     assert durability.effects[0][1] == ("application-1", "application-2")
     assert result.units[0].substantive_effect_id == "effect-1"
+
+
+def test_packed_world_buffer_fails_before_any_policy_dispatch():
+    import pytest
+    from toolsandbox_pipeline.offline.memory_orchestrator import MemoryOrchestrationError
+    from toolsandbox_pipeline.schemas.offline_memory import WorldTrajectoryProjection
+    entry = reference()
+    world = WorldTrajectoryProjection(
+        trajectory_id=entry.trajectory_id, manifest_position=0, visible_states=(),
+        draft_action=entry.policy_projection.proposed_actions[0], controller_codes=(), visible_tool_outcomes=(),
+        critic_output={'verdict': 'accept', 'error_codes': [], 'predicted_outcome': 'success', 'predicted_effect': 'Answer delivered', 'correction': ''},
+        revision_occurred=False, attributable_failure=False, attribution_kind='verified_success')
+    executor = Executor(())
+    durability = Durability()
+    runner = subject(executor, durability)
+    runner.input_representation = 'packed-v2'
+    with pytest.raises(MemoryOrchestrationError, match='Policy-only'):
+        runner.run(buffer((entry.model_copy(update={'world_projection': world}),)))
+    assert not executor.calls and not durability.checkpoints
+
+
+
+def test_explicit_policy_v2_world_v1_preserves_order_and_role_inputs():
+    from toolsandbox_pipeline.schemas.offline_memory import WorldTrajectoryProjection, WorldMemoryCandidateDecision
+    entry = reference()
+    world = WorldTrajectoryProjection(
+        trajectory_id=entry.trajectory_id, manifest_position=0, visible_states=(),
+        draft_action=entry.policy_projection.proposed_actions[0], controller_codes=(), visible_tool_outcomes=(),
+        critic_output={'verdict':'accept','error_codes':[],'predicted_outcome':'success','predicted_effect':'A visible effect','correction':''},
+        revision_occurred=False, attributable_failure=False, attribution_kind='verified_success')
+    executor = Executor((PolicyMemoryCandidateDecision(result='NONE'), WorldMemoryCandidateDecision(result='NONE')))
+    runner = subject(executor, Durability(), input_representation='packed-v2', world_input_representation='v1')
+    result = runner.run(buffer((entry.model_copy(update={'world_projection':world}),)))
+    assert [(p.memory_role,p.prompt_version) for p in executor.calls] == [('policy','v2'),('world','v1')]
+    assert result.policy_counts['NONE'] == result.world_counts['NONE'] == 1

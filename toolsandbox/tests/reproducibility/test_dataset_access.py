@@ -63,3 +63,49 @@ def test_hash_mismatch_returns_no_partial_leases(tmp_path):
     with pytest.raises(ValueError):
         access.load(requested_ids=(manifest.scenarios[0].scenario_id,), **kwargs)
     assert audit[-1]["accepted"] is False
+
+
+def v2_gate(tmp_path, *, verified=True):
+    access,manifest,audit,constructed,kwargs=gate(tmp_path)
+    index_path=access.manifest_path.parent/'dataset_index.json'
+    index=json.loads(index_path.read_bytes())
+    # Synthetic fixture preserves the real setup-only build status.
+    evidence=dict(version='dataset-build-execution-environment-v2',dataset_index_sha256=file_hash(index_path.read_bytes()),
+        dataset_build_status=index['status'],dataset_build_environment=index['environment'],
+        dataset_build_environment_sha256=index['environment_sha256'])
+    calls=[]
+    def verifier(value,**binding):
+        calls.append((value,binding));return verified
+    access=DatasetAccessGate(manifest_path=access.manifest_path,expected_manifest_sha256=access.expected_manifest_sha256,
+        reconstruct=access.reconstruct,audit=access.audit,hash_scenario=access.hash_scenario,
+        execution_attestation=evidence,verify_execution_attestation=verifier)
+    return access,manifest,audit,constructed,kwargs,calls
+
+
+def test_v2_verified_execution_allows_setup_build_but_preserves_manifest_and_shard(tmp_path):
+    access,manifest,audit,constructed,kwargs,calls=v2_gate(tmp_path)
+    sid=manifest.scenarios[0].scenario_id
+    assert access.load(requested_ids=(sid,),purpose='train_round',train_shard=0,**kwargs)
+    assert constructed==[sid] and calls[0][1]['dataset_index_path'].name=='dataset_index.json'
+    index=json.loads((access.manifest_path.parent/'dataset_index.json').read_bytes())
+    assert index['status']=='setup_only'
+
+
+@pytest.mark.parametrize('damage',['test','hash','evidence','verifier','shard'])
+def test_v2_cannot_bypass_split_manifest_or_runtime_validation(tmp_path,damage):
+    access,manifest,audit,constructed,kwargs,calls=v2_gate(tmp_path,verified=damage!='verifier')
+    sid=manifest.scenarios[0].scenario_id
+    kwargs.update(purpose='train_round',train_shard=0)
+    if damage=='test':kwargs['split']='test'
+    elif damage=='hash':kwargs['manifest_sha256']='sha256:'+'b'*64
+    elif damage=='evidence':access.execution_attestation['dataset_index_sha256']='sha256:'+'b'*64
+    elif damage=='shard':kwargs['train_shard']=2
+    with pytest.raises(ValueError):access.load(requested_ids=(sid,),**kwargs)
+    assert not constructed and not audit[-1]['accepted']
+
+
+def test_original_gate_still_rejects_setup_only_formal_train(tmp_path):
+    access,manifest,audit,constructed,kwargs=gate(tmp_path)
+    with pytest.raises(ValueError):
+        access.load(requested_ids=(manifest.scenarios[0].scenario_id,),purpose='train_round',train_shard=0,**kwargs)
+    assert not constructed

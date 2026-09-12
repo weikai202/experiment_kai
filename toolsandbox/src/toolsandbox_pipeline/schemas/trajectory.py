@@ -135,6 +135,16 @@ class ToolActionRecord(_FrozenStrictModel):
     rolled_back: bool
     failed: bool
 
+    @property
+    def is_user_conversation_control(self) -> bool:
+        """Native User termination has a transaction but no Agent decision."""
+        return (
+            bool(self.effect_classes)
+            and all(effect == "conversation_control" for effect in self.effect_classes)
+            and all(name == "end_conversation" for name in self.canonical_tool_ids)
+            and all(skill is None for skill in self.selected_skill_ids)
+        )
+
     @model_validator(mode="after")
     def coherent_tool_action(self) -> "ToolActionRecord":
         width = len(self.call_ids)
@@ -290,6 +300,10 @@ class TrustedTrajectory(_FrozenStrictModel):
             for action in self.tool_actions
             if action.executed and action.committed
         )
+        all_call_ids = tuple(call_id for action in executed_actions for call_id in action.call_ids)
+        if len(set(all_call_ids)) != len(all_call_ids):
+            raise ValueError("tool call identity reused across turns")
+        executed_actions = tuple(action for action in executed_actions if not action.is_user_conversation_control)
         action_call_ids = tuple(
             call_id for action in executed_actions for call_id in action.call_ids
         )

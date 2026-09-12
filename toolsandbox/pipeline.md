@@ -249,10 +249,13 @@ For each Agent state:
 7. Reuse the Initial Policy retrieval for Revision without retrieving again.
 
 Cache embeddings by provider, exact model name, and query hash. Every embedding
-input uses canonical JSON and must contain at most 8,000 UTF-8 bytes; a batch
-contains at most 2,048 inputs and 280,000 aggregate UTF-8 bytes. These conservative
-pre-dispatch byte limits provide headroom beneath the provider token limits without
-local tokenization. Over-limit input fails before dispatch and is never truncated.
+input uses canonical JSON and must contain at most 8,191 cl100k_base tokens; a batch
+contains at most 2,048 inputs and 280,000 aggregate UTF-8 bytes. The pinned local
+tiktoken vocabulary validates longer inputs without network access. Inputs with
+at most 8,191 bytes are already safe under UTF-8 BPE. A one-token margin is kept
+below the documented 8,192-token ceiling. Over-limit input fails before dispatch
+and is never truncated. This supersedes the initial 8,000-byte guard after the
+2026-09-12 reflection smoke rejected a complete 2,625-token input.
 Every embedding request must use `text-embedding-3-small`; no alternate embedding
 model or lexical retrieval fallback is permitted. If the embedding API fails or
 returns an invalid response, write a checkpoint and stop the run. Every retrieval
@@ -478,7 +481,7 @@ INSUFFICIENT_CONTEXT
 LIKELY_MINEFIELD_BEHAVIOR
 ```
 
-`predicted_effect` and `correction` are each limited to 40 whitespace-delimited words. `accept` requires an empty error list and correction. `revise` requires at least one code and a non-empty correction. `uncertain` requires `predicted_outcome: uncertain`, at least one code, and a correction describing the unresolved constraint.
+`predicted_effect` and `correction` are each limited to 128 whitespace-delimited words. `accept` requires an empty error list and correction. `revise` requires at least one code and a non-empty correction. `uncertain` requires `predicted_outcome: uncertain`, at least one code, and a correction describing the unresolved constraint.
 
 The Critic cannot see milestone or minefield definitions. `LIKELY_MINEFIELD_BEHAVIOR` may rely only on visible user intent, schemas, and heuristic memory; it cannot claim that a native minefield was actually matched.
 
@@ -580,6 +583,12 @@ memory_review_max_tokens_bootstrap: 256
 failure_mode_update_max_tokens_bootstrap: 512
 skill_candidate_max_tokens_bootstrap: 2048
 ```
+
+For the user-authorized output-length smoke (2026-09-12),
+`configs/online_token_limits.smoke.json` selects development-only calibration
+ceilings of Policy 512, Critic 768, and Revision 512 tokens. These are output
+ceilings, not target lengths; outputs are never trimmed or padded. This separate
+profile does not promote or replace formal calibrated limits.
 
 Before a role may enter a formal train round or evaluation, run its versioned
 token-limit calibration using only deterministic train inputs. Observe actual

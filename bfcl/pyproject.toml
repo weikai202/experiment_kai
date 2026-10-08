@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bfcl-evolution-pipeline"
+version = "0.1.0"
+description = "Pipeline-aligned evolution protocol for BFCL v4 multi-turn"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8.3,<9"]
+bfcl = [
+  "bfcl_eval @ git+https://github.com/ShishirPatil/gorilla.git@6ea57973c7a6097fd7c5915698c54c17c5b1b6c8#subdirectory=berkeley-function-call-leaderboard",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bfcl_pipeline"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+testpaths = ["tests"]
+pythonpath = ["src"]

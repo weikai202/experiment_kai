@@ -1,0 +1,11 @@
+{
+  "qwen_model": "Qwen/Qwen3-32B",
+  "qwen_temperature": 0.0,
+  "qwen_seed": 0,
+  "qwen_chat_template_kwargs": {
+    "enable_thinking": false
+  },
+  "user_simulator_model": "gpt-4o-mini-2024-07-18",
+  "embedding_model": "text-embedding-3-small",
+  "embedding_fallback": null
+}

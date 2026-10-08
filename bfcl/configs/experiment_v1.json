@@ -1,0 +1,21 @@
+{
+  "protocol": "bfcl_evolution_family_split_v1",
+  "benchmark_scope": "BFCL v4 multi-turn only",
+  "official_leaderboard_protocol": false,
+  "bfcl_revision": "6ea57973c7a6097fd7c5915698c54c17c5b1b6c8",
+  "data_seed": 0,
+  "family_count": 200,
+  "variants": ["base", "miss_func", "miss_param", "long_context"],
+  "split_family_counts": {"train": 120, "dev": 40, "test": 40},
+  "split_allocation_after_shuffle": ["test:0:40", "dev:40:80", "train:80:200"],
+  "round_family_counts": [40, 40, 40],
+  "round_case_counts": [160, 160, 160],
+  "process_count": 1,
+  "pipeline_model": "Qwen/Qwen3-32B",
+  "embedding_model": "text-embedding-3-small",
+  "enable_thinking": false,
+  "temperature": 0.0,
+  "max_tokens_policy": "required_hash_verified_live_train_smoke_calibration",
+  "formal_max_tokens_default": null,
+  "final_system_order": ["vanilla", "g000", "g003"]
+}

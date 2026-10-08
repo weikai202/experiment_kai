@@ -1,0 +1,6 @@
+<instructions>
+{agent_instruction}
+</instructions>
+<policy>
+{domain_policy}
+</policy>

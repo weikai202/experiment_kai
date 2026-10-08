@@ -1,0 +1,5 @@
+{global_user_sim_guidelines_with_persona}
+
+<scenario>
+{instructions}
+</scenario>

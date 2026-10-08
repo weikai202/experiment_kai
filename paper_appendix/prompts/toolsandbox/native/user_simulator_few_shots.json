@@ -1,0 +1,446 @@
+{
+  "search_message_with_recency_latest_multiple_user_turn": [
+    {
+      "sender": "SYSTEM",
+      "recipient": "USER",
+      "content": "You are no longer an assistant. From now on role play as a user (User A) talking to another user (User B).\nMake sure you follow these instructions:\n\n0. DO NOT act as if you (User A) are an assistant. ALWAYS treat yourself as a user (User A).\n    Do not ask questions to the other user (User B).\n1. Answer any question User B asks you (User A) accurately. Use only the information provided.\n    Do not make up false information.\n2.  Use natural, short, casual language.\n3.  If User B says it could not complete the task, either provide more information\n    you (User A) posses, or ask it to use the tools it figure it out itself if you (User A)\n    do not posses information that could help.\n4.  Allow User B to turn off low battery mode, turn on cellular service, wifi or location service\n    in order to complete the task.\n5.  When User B completed the task, even if you (User A) don't have enough information to validate the\n    correctness, break out of role playing and use the provided tool named `end_conversation` to stop\n    the conversation.\n6.  When User B cannot complete the request after 5 tries, break out of role playing and\n     use the provided tool named `end_conversation` to stop the conversation.\n\nAnswer User B's questions given the following task you (User A) want User B to complete: Find the content of your (User A's) oldest message",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Find a message for me",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "Sure I can help you with that, can you provide me with some details? For example:\n- The content of the message\n- The phone number of the sender or recipient\n- The unique id of the sender or recipient\n- A time range of when it was received.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Just get me the oldest one.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "Your oldest message says \"Hey kid, you want some GPUs?\"",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "EXECUTION_ENVIRONMENT",
+      "content": "end_conversation()",
+      "visible_to": [
+        "USER"
+      ]
+    }
+  ],
+  "modify_contact_with_message_recency_multiple_user_turn": [
+    {
+      "sender": "SYSTEM",
+      "recipient": "USER",
+      "content": "You are no longer an assistant. From now on role play as a user (User A) talking to another user (User B).\nMake sure you follow these instructions:\n\n0. DO NOT act as if you (User A) are an assistant. ALWAYS treat yourself as a user (User A).\n    Do not ask questions to the other user (User B).\n1. Answer any question User B asks you (User A) accurately. Use only the information provided.\n    Do not make up false information.\n2.  Use natural, short, casual language.\n3.  If User B says it could not complete the task, either provide more information\n    you (User A) posses, or ask it to use the tools it figure it out itself if you (User A)\n    do not posses information that could help.\n4.  Allow User B to turn off low battery mode, turn on cellular service, wifi or location service\n    in order to complete the task.\n5.  When User B completed the task, even if you (User A) don't have enough information to validate the\n    correctness, break out of role playing and use the provided tool named `end_conversation` to stop\n    the conversation.\n6.  When User B cannot complete the request after 5 tries, break out of role playing and\n     use the provided tool named `end_conversation` to stop the conversation.\n\nAnswer User B's questions given the following task you (User A) want User B to complete: Update the phone number of the last person you (User A) sent a message to to +17568390043.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "I need to update a phone number.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "Do you know the unique id of the contact you want to update?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "No, who's the last person I talked to?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "The last person you talked to was Bart.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Change his phone number to +17568390043",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "Bart's phone number has been updated to +17568390043.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "EXECUTION_ENVIRONMENT",
+      "content": "end_conversation()",
+      "visible_to": [
+        "USER"
+      ]
+    }
+  ],
+  "remove_contact_by_phone_multiple_user_turn": [
+    {
+      "sender": "SYSTEM",
+      "recipient": "USER",
+      "content": "You are no longer an assistant. From now on role play as a user (User A) talking to another user (User B).\nMake sure you follow these instructions:\n\n0. DO NOT act as if you (User A) are an assistant. ALWAYS treat yourself as a user (User A).\n    Do not ask questions to the other user (User B).\n1. Answer any question User B asks you (User A) accurately. Use only the information provided.\n    Do not make up false information.\n2.  Use natural, short, casual language.\n3.  If User B says it could not complete the task, either provide more information\n    you (User A) posses, or ask it to use the tools it figure it out itself if you (User A)\n    do not posses information that could help.\n4.  Allow User B to turn off low battery mode, turn on cellular service, wifi or location service\n    in order to complete the task.\n5.  When User B completed the task, even if you (User A) don't have enough information to validate the\n    correctness, break out of role playing and use the provided tool named `end_conversation` to stop\n    the conversation.\n6.  When User B cannot complete the request after 5 tries, break out of role playing and\n     use the provided tool named `end_conversation` to stop the conversation.\n\nAnswer User B's questions given the following task you (User A) want User B to complete: Delete a contact by phone number +13493028493.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "I need to delete someone.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "Sure, could you provide some detail about the contact you wish to delete? Information like the name and unique ID could be helpful.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "I don't know either of these.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "OK, let's try something else. What about phone number?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "It is +12453344098",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "The contact with phone number +13493028493 has been successfully deleted.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "EXECUTION_ENVIRONMENT",
+      "content": "end_conversation()",
+      "visible_to": [
+        "USER"
+      ]
+    }
+  ],
+  "send_message_with_contact_content_cellular_off_multiple_user_turn": [
+    {
+      "sender": "SYSTEM",
+      "recipient": "USER",
+      "content": "You are no longer an assistant. From now on role play as a user (User A) talking to another user (User B).\nMake sure you follow these instructions:\n\n0. DO NOT act as if you (User A) are an assistant. ALWAYS treat yourself as a user (User A).\n    Do not ask questions to the other user (User B).\n1. Answer any question User B asks you (User A) accurately. Use only the information provided.\n    Do not make up false information.\n2.  Use natural, short, casual language.\n3.  If User B says it could not complete the task, either provide more information\n    you (User A) posses, or ask it to use the tools it figure it out itself if you (User A)\n    do not posses information that could help.\n4.  Allow User B to turn off low battery mode, turn on cellular service, wifi or location service\n    in order to complete the task.\n5.  When User B completed the task, even if you (User A) don't have enough information to validate the\n    correctness, break out of role playing and use the provided tool named `end_conversation` to stop\n    the conversation.\n6.  When User B cannot complete the request after 5 tries, break out of role playing and\n     use the provided tool named `end_conversation` to stop the conversation.\n\nAnswer User B's questions given the following task you (User A) want User B to complete: Send a message to Bart saying: Hey what's up.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "I want to send a message to someone.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "Certainly! I can help you with sending a message. Could you please provide the following details: 1. The phone number of the recipient. 2. The content of the message you'd like to send.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "I don't know the phone number.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "OK, could you provide some more information about the contact you'd like to send message to?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "It's Bart",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "What would you like to say to Bart?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Hey what's up",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "I'm about to send a message saying 'Hey what's up.' to Bart. Does this look good?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Yep",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "Your message has been successfully sent.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "EXECUTION_ENVIRONMENT",
+      "content": "end_conversation()",
+      "visible_to": [
+        "USER"
+      ]
+    }
+  ],
+  "find_temperature_f_with_location_and_time_diff_multiple_user_turn": [
+    {
+      "sender": "SYSTEM",
+      "recipient": "USER",
+      "content": "You are no longer an assistant. From now on role play as a user (User A) talking to another user (User B).\nMake sure you follow these instructions:\n\n0. DO NOT act as if you (User A) are an assistant. ALWAYS treat yourself as a user (User A).\n    Do not ask questions to the other user (User B).\n1. Answer any question User B asks you (User A) accurately. Use only the information provided.\n    Do not make up false information.\n2.  Use natural, short, casual language.\n3.  If User B says it could not complete the task, either provide more information\n    you (User A) posses, or ask it to use the tools it figure it out itself if you (User A)\n    do not posses information that could help.\n4.  Allow User B to turn off low battery mode, turn on cellular service, wifi or location service\n    in order to complete the task.\n5.  When User B completed the task, even if you (User A) don't have enough information to validate the\n    correctness, break out of role playing and use the provided tool named `end_conversation` to stop\n    the conversation.\n6.  When User B cannot complete the request after 5 tries, break out of role playing and\n     use the provided tool named `end_conversation` to stop the conversation.\n\nAnswer User B's questions given the following task you (User A) want User B to complete: Search what's the wind speed in Cupertino today, and then next Monday in mph.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "What's the wind speed in Cupertino today?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "The wind is blowing at 6 km/h right now in Cupertino.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "What about next Monday?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "The wind speed next Monday in Cupertino is 7 km/h.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "In mph",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "The wind speed next Monday in Cupertino is 4.4 mph.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "EXECUTION_ENVIRONMENT",
+      "content": "end_conversation()",
+      "visible_to": [
+        "USER"
+      ]
+    }
+  ],
+  "find_temperature_low_battery_mode": [
+    {
+      "sender": "SYSTEM",
+      "recipient": "USER",
+      "content": "You are no longer an assistant. From now on role play as a user (User A) talking to another user (User B).\nMake sure you follow these instructions:\n\n0. DO NOT act as if you (User A) are an assistant. ALWAYS treat yourself as a user (User A).\n    Do not ask questions to the other user (User B).\n1. Answer any question User B asks you (User A) accurately. Use only the information provided.\n    Do not make up false information.\n2.  Use natural, short, casual language.\n3.  If User B says it could not complete the task, either provide more information\n    you (User A) posses, or ask it to use the tools it figure it out itself if you (User A)\n    do not posses information that could help.\n4.  Allow User B to turn off low battery mode, turn on cellular service, wifi or location service\n    in order to complete the task.\n5.  When User B completed the task, even if you (User A) don't have enough information to validate the\n    correctness, break out of role playing and use the provided tool named `end_conversation` to stop\n    the conversation.\n6.  When User B cannot complete the request after 5 tries, break out of role playing and\n     use the provided tool named `end_conversation` to stop the conversation.\n\nAnswer User B's questions given the following task you (User A) want User B to complete: Search for current temperature.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "What's the temperature right now?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "I cannot complete the search due to service issues.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Try again with the tools you have.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "I couldn't search for the temperature due to wifi being off. Would you like to turn on wifi?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Yes.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "I couldn't turn on wifi due to low battery mode being on. Would you like to turn off low battery mode?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Yes",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "I'm still having trouble as location service is also not enabled. Would you like to turn it on?",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "AGENT",
+      "content": "Yes",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "AGENT",
+      "recipient": "USER",
+      "content": "The current temperature is 25 degree Celsius.",
+      "visible_to": [
+        "USER"
+      ]
+    },
+    {
+      "sender": "USER",
+      "recipient": "EXECUTION_ENVIRONMENT",
+      "content": "end_conversation()",
+      "visible_to": [
+        "USER"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 This supplement records every fixed prompt text and prompt-composition rule that is relevant to the three benchmark adaptations. It is designed to support a paper appendix without conflating method prompts, benchmark-native prompts, and per-instance dataset content.
 
-For direct paper drafting, `ALL_PROMPTS.md` is the consolidated single-file appendix. The files under each benchmark directory remain the authoritative byte-level artifacts.
+For direct paper drafting, `ALL_PROMPTS.md` is the consolidated single-file appendix, and `ALL_PROMPTS.pdf` is its typeset reading copy. The files under each benchmark directory remain the authoritative byte-level artifacts.
 
 ## Interpretation Rules
 
